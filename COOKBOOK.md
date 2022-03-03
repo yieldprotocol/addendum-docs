@@ -1,13 +1,8 @@
-#
+# Introduction
 
-Introduction
-
-##
-
-Converting calls
+## Converting calls
 
 The Ladle takes calls in an encoded format. In this document I’m using translated calls.
-
 **Using Ladle for Ether, Permit, Cauldron or fyToken actions. **
 
 In the Ladle, all actions will be expressed as:
@@ -40,13 +35,9 @@ ladle.batch(
 )
 ```
 
-#
+# Recipes
 
-Recipes
-
-##
-
-Vault creation, collateral posting, and borrowing
+## Vault creation, collateral posting, and borrowing
 
 **Build a vault**
 
@@ -274,9 +265,7 @@ This batch is the simplest and most efficient manner for new users to borrow und
 
 All parameters have been described in previous actions.
 
-##
-
-Debt Repayment
+## Debt Repayment
 
 **Repay with underlying before maturity**
 
@@ -363,9 +352,7 @@ Combine with a base permit for the base join if not present.
 
 - No approval is necessary
 
-##
-
-Vault Management
+## Vault Management
 
 **Destroy a vault**
 
@@ -441,9 +428,7 @@ This action changes the debt in a vault, and the vault itself, from one series t
 
 **Limits:** The base reserves of the related pool.
 
-##
-
-Lending
+## Lending
 
 **Lend**
 
@@ -578,9 +563,7 @@ Rolling lending after maturity means redeeming fyToken for underlying, which is 
 
 **Limits:** The virtual fyToken reserves, minus the base reserves, divided by two, of the second pool.
 
-##
-
-Liquidity Providing
+## Liquidity Providing
 
 **Provide liquidity by borrowing**
 
@@ -1014,9 +997,7 @@ Removing liquidity from a strategy has an initial two steps in which the strateg
 
 **Note:** Unlikely to remove liquidity before maturity with strategies. Unless sunsetting strategy.
 
-##
-
-V1 Liquidity Migration
+## V1 Liquidity Migration
 
 **Use V1 Liquidity Tokens to provide liquidity to V2**
 
@@ -1049,9 +1030,7 @@ Once the Dai is in the user’s wallet, proceed by appending any of the other li
 
 `minimumFYDaiPrice`: Minimum FYDai price to be accepted.
 
-##
-
-stETH Wrapping/Unwrapping
+## stETH Wrapping/Unwrapping
 
 **Wrap stEth into wstETH**
 
