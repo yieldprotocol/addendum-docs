@@ -83,7 +83,7 @@ This batch adds an ERC20 as collateral to a vault. It can be combined with previ
 `0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
 
 **Post ERC20 collateral (Ladle Approval)**
-
+![Post Flow](/flow-diagrams/depositFlow.png)
 This batch adds an ERC20 as collateral to a vault. If the ladle already has the permission to move ilk for the user it would be cheaper in gas terms. It can be combined with previous actions that create vaults.
 
 ```
