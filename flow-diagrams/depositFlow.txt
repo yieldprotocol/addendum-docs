@@ -1,0 +1,13 @@
+title Deposit flow for ERC20
+
+participant User
+participant ERC20
+participant Ladle
+participant Join
+participant Cauldron
+
+User->ERC20:approve(ladle,ink)
+User->Ladle:batch(build,pour)
+Ladle->Cauldron: pour(vaultId,ink,art)
+Ladle->Join:transferERC20From(user,join,ink)
+Ladle->User:series.fyToken.mint(art)

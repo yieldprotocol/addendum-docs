@@ -1,0 +1,14 @@
+title Repay flow for ERC20
+
+participant User
+participant fyToken
+participant Ladle
+participant Join
+participant Cauldron
+
+User->fyToken:transfer(borrowed)
+User->Ladle:pour(vaultId,-posted,-borrowed)
+Ladle->Cauldron:pour(vaultId,-posted,-borrowed)
+Ladle->Join:exit(posted)
+Join->User:transferERC20(user,posted)
+Ladle->fyToken:burn(borrowed)
