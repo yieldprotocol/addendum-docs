@@ -39,7 +39,7 @@ ladle.batch(
 
 ## Vault creation, collateral posting, and borrowing
 
-**Build a vault**
+### Build a vault
 
 This action can be added before any others where a vault is needed.
 
@@ -55,7 +55,7 @@ This action can be added before any others where a vault is needed.
 
 `salt`: Parameter to change the random vaultId created. It can be safely set to zero.
 
-**Post ERC20 collateral (Join Approval)**
+### Post ERC20 collateral (Join Approval)
 
 This batch adds an ERC20 as collateral to a vault. It can be combined with previous actions that create vaults.
 
@@ -82,7 +82,7 @@ This batch adds an ERC20 as collateral to a vault. It can be combined with previ
 
 `0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
 
-**Post ERC20 collateral (Ladle Approval)**
+### Post ERC20 collateral (Ladle Approval)
 
 ![Post Flow](/flow-diagrams/depositFlow.png)
 
@@ -113,8 +113,7 @@ This batch adds an ERC20 as collateral to a vault. If the ladle already has the 
 `ignored`: Receiver of any tokens produced by pour, which is not producing any in this batch.
 
 `0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
-
-**Post ERC1155 collateral (Ladle Approval)**
+### Post ERC1155 collateral (Ladle Approval)
 
 This batch adds a token within an ERC1155 contract as collateral to a vault, using a Ladle module. Off-chain signatures are not available for ERC1155 and a previous transaction is required to approve the Ladle. It can be combined with previous actions that create vaults.
 
@@ -145,7 +144,7 @@ This batch adds a token within an ERC1155 contract as collateral to a vault, usi
 
 **Note:** Approval for an ERC1155 is executed as `erc1155.setApprovalForAll(spender, true)` and gives permission to spender to take any amount of any token inside `erc1155` from the caller.
 
-**Withdraw ERC20 collateral**
+### Withdraw ERC20 collateral
 
 This batch removes an amount of an ERC20 collateral from a vault. Destroying the vault at the end is optional and possible only if the vault holds no collateral and no debt.
 
@@ -166,7 +165,7 @@ This batch removes an amount of an ERC20 collateral from a vault. Destroying the
 
 **Limits:** The collateral token balance of the related Join.
 
-**Post Ether as collateral**
+### Post Ether as collateral
 
 This batch adds Ether as collateral to a vault. It can be combined with previous actions that create vaults.
 
@@ -187,7 +186,7 @@ This batch adds Ether as collateral to a vault. It can be combined with previous
 
 `0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
 
-**Withdraw Ether collateral**
+### Withdraw Ether collateral
 
 This batch removes an amount of Ether collateral from a vault. Destroying the vault at the end is optional and possible only if the vault holds no collateral and no debt.
 
@@ -215,7 +214,7 @@ The Ether withdrawn will be temporarily held by the Ladle until the end of the t
 
 **Limits:** The WETH balance of the related Join.
 
-**Borrow fyToken**
+### Borrow fyToken
 
 This action borrows fyToken from an existing vault. It can be combined with previous actions that create vaults and post collateral, among others. Borrowing fyToken is frequently done as part of larger batches.
 
@@ -233,7 +232,7 @@ This action borrows fyToken from an existing vault. It can be combined with prev
 
 `borrowed`: Amount of debt to add to the vault, and fyTokens to send to the receiver.
 
-**Borrow underlying**
+### Borrow underlying
 
 This action borrows fyToken from an existing vault, which is then exchanged for underlying in a YieldSpace pool. The amount of underlying obtained is an exact number provided as a parameter, and the debt incurred in the vault is variable but within provided limits. It can be combined with previous actions that create vaults and post collateral, among others.
 
@@ -253,7 +252,7 @@ This action borrows fyToken from an existing vault, which is then exchanged for 
 
 `maximumDebt`: Maximum debt to accept for the vault in fyToken terms.
 
-**Post ERC20 collateral and borrow underlying**
+### Post ERC20 collateral and borrow underlying
 
 This batch is the simplest and most efficient manner for new users to borrow underlying with their collateral.
 
@@ -269,7 +268,7 @@ All parameters have been described in previous actions.
 
 ## Debt Repayment
 
-**Repay with underlying before maturity**
+### Repay with underlying before maturity
 
 This batch will use a precise amount of underlying to repay debt in a vault. All the underlying provided will be converted into fyToken at market rates, and used to repay debt. If there isn’t enough debt to repay, the function will revert. If the user intends to repay all his debt, use “Repay a whole vault with underlying before maturity”.
 
@@ -300,7 +299,7 @@ Combine with a base permit for the ladle if not present.
 
 **Limits:** The real fyToken reserves of the related pool.
 
-**Repay a whole vault with underlying before maturity**
+### Repay a whole vault with underlying before maturity
 
 This batch will use a maximum amount of underlying to repay all the debt in a vault. The underlying will be converted into fyToken at market rates.
 
@@ -325,7 +324,7 @@ Combine with a base permit for the ladle if not present.
 
 **Limits:** The real fyToken reserves of the related pool.
 
-**Repay with underlying after maturity**
+### Repay with underlying after maturity
 
 This action will use underlying to repay debt in a vault after maturity. The underlying won’t be exchanged at market rates, but the debt grows every second according to the appropriate rate oracle. If using to repay a whole vault, the amount of underlying needed won’t be exactly known but it can be estimated to be very close over a current reading.
 
@@ -345,7 +344,7 @@ Combine with a base permit for the base join if not present.
 
 `debtRepaidInFYToken`: Debt to be repaid in fyToken terms. Please do the conversion off-chain using the rate oracle.
 
-**Redeem**
+### Redeem
 
 ```
   await fyToken.redeem()
@@ -356,7 +355,7 @@ Combine with a base permit for the base join if not present.
 
 ## Vault Management
 
-**Destroy a vault**
+### Destroy a vault
 
 This action will destroy a vault, provided it has no debt or collateral. Combine with any batch that repays debt and withdraws collateral.
 
@@ -368,7 +367,7 @@ This action will destroy a vault, provided it has no debt or collateral. Combine
 
 `vaultId`: Vault to destroy.
 
-**Merge two vaults into one**
+### Merge two vaults into one
 
 This batch will combine two vaults of the same series and ilk into one, adding their debt and collateral.
 
@@ -387,7 +386,7 @@ This batch will combine two vaults of the same series and ilk into one, adding t
 
 `debt`: Debt amount in the first vault in fyToken terms.
 
-**Split a vault into two**
+### Split a vault into two
 
 This batch will split part of the debt and collateral of one vault into a new vault.
 
@@ -410,7 +409,7 @@ This batch will split part of the debt and collateral of one vault into a new va
 
 `debt`: Debt amount to split from the original vault.
 
-**Roll debt before maturity**
+### Roll debt before maturity
 
 This action changes the debt in a vault, and the vault itself, from one series to another. This action uses YieldSpace pools for the conversion.
 
@@ -432,7 +431,7 @@ This action changes the debt in a vault, and the vault itself, from one series t
 
 ## Lending
 
-**Lend**
+### Lend
 
 Lending is selling underlying for fyToken in a YieldSpace pool. The pool won’t pull tokens from the user, so we get the Ladle to move them.
 
@@ -460,7 +459,7 @@ Lending is selling underlying for fyToken in a YieldSpace pool. The pool won’t
 
 **Limits:** The virtual fyToken reserves, minus the base reserves, divided by two.
 
-**Close lending before maturity**
+### Close lending before maturity
 
 Closing a lending position before maturity is the inverse of lending, meaning selling fyToken for underlying in a YieldSpace pool.
 
@@ -488,7 +487,7 @@ Closing a lending position before maturity is the inverse of lending, meaning se
 
 **Limits:** The base reserves of the related pool.
 
-**Close lending after maturity**
+### Close lending after maturity
 
 Closing a lending position after maturity is achieved by redeeming the fyToken representing the lending position. No approval is required when the user calls the fyToken contract directly.
 
@@ -500,7 +499,7 @@ Closing a lending position after maturity is achieved by redeeming the fyToken r
 
 `fyTokenToRedeem`: Amount of fyToken to redeem.
 
-**Roll lending before maturity**
+### Roll lending before maturity
 
 Rolling lending before maturity means selling fyToken for underlying, which is deposited into another pool and sold for fyToken of a second series, but sharing the underlying denomination with the first one.
 
@@ -534,7 +533,7 @@ Rolling lending before maturity means selling fyToken for underlying, which is d
 <p style="text-align: right">
 <strong>Limits:</strong> The base reserves of the first pool. The virtual fyToken reserves, minus the base reserves, divided by two, of the second pool.</p>
 
-**Roll lending after maturity - RC10**
+### Roll lending after maturity - RC10
 
 Rolling lending after maturity means redeeming fyToken for underlying, which is deposited into another pool and sold for fyToken of a second series, but sharing the underlying denomination with the first one.
 
@@ -567,7 +566,7 @@ Rolling lending after maturity means redeeming fyToken for underlying, which is 
 
 ## Liquidity Providing
 
-**Provide liquidity by borrowing**
+### Provide liquidity by borrowing
 
 When providing liquidity by borrowing, the user borrows an amount of fyToken to provide to the pool, along with underlying in the same proportion as the pool reserves.
 
