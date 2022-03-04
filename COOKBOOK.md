@@ -1,9 +1,86 @@
+```
+                                        __________________   __________________
+                                    .-/|                  \ /                  |\-.
+                                    ||||                   |                   ||||
+                                    ||||                   |                   ||||
+                                    ||||                   |                   ||||
+                                    ||||      Yield        |   "Recipes        ||||
+                                    ||||                   |   made with love  ||||
+                                    ||||     COOKBOOK      |   just like mama  ||||
+                                    ||||                   |   used to make"   ||||
+                                    ||||                   |                   ||||
+                                    ||||                   |                   ||||
+                                    ||||                   |                   ||||
+                                    ||||__________________ | __________________||||
+                                    ||/===================\|/===================\||
+                                    `--------------------~___~-------------------''
+```
+### TABLE OF CONTENTS
+
+[Vault creation, collateral posting, and borrowing](#vault-creation-collateral-posting-and-borrowing)
+  - [Build a vault](#build-a-vault)
+  - [Post ERC20 collateral (Join Approval)](#post-erc20-collateral-join-approval)
+  - [Post ERC20 collateral (Ladle Approval)](#post-erc20-collateral-ladle-approval)
+  - [Post ERC1155 collateral (Ladle Approval)](#post-erc1155-collateral-ladle-approval)
+  - [Withdraw ERC20 collateral](#withdraw-erc20-collateral)
+  - [Post Ether as collateral](#post-ether-as-collateral)
+  - [Borrow fyToken](#borrow-fytoken)
+  - [Borrow underlying](#borrow-underlying)
+  - [Post ERC20 collateral and borrow underlying](#post-erc20-collateral-and-borrow-underlying)
+
+
+[Debt Repayment](#debt-repayment)
+  - [Repay with underlying before maturity](#repay-with-underlying-before-maturity)
+  - [Repay a whole vault with underlying before maturity](#repay-a-whole-vault-with-underlying-before-maturity)
+  - [Repay with underlying after maturity](#repay-with-underlying-after-maturity)
+  - [Redeem](#redeem)
+
+[Vault Management](#vault-management)
+  - [Destroy a vault](#destroy-a-vault)
+  - [Merge two vaults into one](#merge-two-vaults-into-one)
+  - [Split a vault into two](#split-a-vault-into-two)
+  - [Roll debt before maturity](#roll-debt-before-maturity)
+
+[Lending](#lending)
+  - [Lend](#lend)
+  - [Close lending before maturity](#close-lending-before-maturity)
+  - [Close lending after maturity](#close-lending-after-maturity)
+  - [Roll lending before maturity](#roll-lending-before-maturity)
+  - [Roll lending after maturity](#roll-lending-after-maturity)
+
+
+[Liquidity Providing](#liquidity-providing)
+  - [Provide liquidity by borrowing](#provide-liquidity-by-borrowing)
+  - [Provide liquidity by borrowing, using only underlying](#provide-liquidity-by-borrowing-using-only-underlying)
+  - [Provide liquidity by buying](#provide-liquidity-by-buying)
+  - [Remove liquidity and repay](#remove-liquidity-and-repay)
+  - [Remove liquidity, repay and sell](#remove-liquidity-repay-and-sell)
+  - [Remove liquidity and redeem](#remove-liquidity-and-redeem)
+  - [Remove liquidity and sell](#remove-liquidity-and-sell)
+  - [Remove liquidity, redeem and close](#remove-liquidity-redeem-and-close)
+  - [Roll liquidity before maturity](#roll-liquidity-before-maturity)
+  - [Provide liquidity to strategy by borrowing](#provide-liquidity-to-strategy-by-borrowing)
+  - [Provide liquidity to strategy by buying](#provide-liquidity-to-strategy-by-buying)
+  - [Remove liquidity from strategy](#remove-liquidity-from-strategy)
+
+
+[V1 Liquidity Migration](#v1-liquidity-migration)
+  - [Use V1 Liquidity Tokens to provide liquidity to V2](#use-v1-liquidity-tokens-to-provide-liquidity-to-v2)
+
+[stETH Wrapping/Unwrapping](#steth-wrappingunwrapping)
+  - [Wrap stEth into wstETH](#wrap-steth-into-wsteth)
+  - [Unwrap wstEth into stETH](#unwrap-wsteth-into-steth)
+
+
+
+
 # Introduction
 
 ## Converting calls
 
 The Ladle takes calls in an encoded format. In this document I’m using translated calls.
-**Using Ladle for Ether, Permit, Cauldron or fyToken actions. **
+
+**Using Ladle for Ether, Permit, Cauldron or fyToken actions.**
 
 In the Ladle, all actions will be expressed as:
 
@@ -19,7 +96,7 @@ ladle.batch(
 )
 ```
 
-**Using Ladle for ROUTE actions. **
+**Using Ladle for ROUTE actions.**
 
 The Ladle can also execute calls on arbitrary targets using ROUTE.
 
@@ -38,6 +115,7 @@ ladle.batch(
 # Recipes
 
 ## Vault creation, collateral posting, and borrowing
+---
 
 ### Build a vault
 
@@ -48,39 +126,27 @@ This action can be added before any others where a vault is needed.
       ladle.buildAction(seriesId, ilkId, salt),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| ` seriesId ` | Series, and therefore underlying, that will be used for borrowing with this vault. |
+| `  ilkId  `  | Collateral that will be used with this vault.                                      |
+| `  salt  `   | Parameter to change the random vaultId created. It can be safely set to zero.      |
 
-`seriesId`: Series, and therefore underlying, that will be used for borrowing with this vault.
-
-`ilkId`: Collateral that will be used with this vault.
-
-`salt`: Parameter to change the random vaultId created. It can be safely set to zero.
 
 ### Post ERC20 collateral (Join Approval)
 
 This batch adds an ERC20 as collateral to a vault. It can be combined with previous actions that create vaults.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| ` ilk ` | Contract for the collateral being added to the vault. |
+| `  ilkJoin  `  | Contract holding ilk for Yield v2.                                      |
+| `  posted  `   | Amount of collateral being deposited.      |
+| `  deadline  `   | Validity of the off-chain signature, as an unix time.      |
+| `  v, r, s  `   | Off-chain signature.      |
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
+| `  ignored  `   | Receiver of any tokens produced by pour, which is not producing any in this batch.      |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
 
-```
-  await ladle.batch([
-    ladle.forwardPermitAction(ilk, ilkJoin, posted, deadline, v, r, s),
-    ladle.pourAction(vaultId, ignored, posted, 0),
-  ])
-```
-
-`ilk`: Contract for the collateral being added to the vault.
-
-`ilkJoin`: Contract holding ilk for Yield v2.
-
-`posted`: Amount of collateral being deposited.
-
-`deadline`: Validity of the off-chain signature, as an unix time.
-
-`v, r, s`: Off-chain signature.
-
-`vaultId`: Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.
-
-`ignored`: Receiver of any tokens produced by pour, which is not producing any in this batch.
-
-`0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
 
 ### Post ERC20 collateral (Ladle Approval)
 
@@ -96,23 +162,18 @@ This batch adds an ERC20 as collateral to a vault. If the ladle already has the 
   ])
 ```
 
-`ilk`: Contract for the collateral being added to the vault.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| ` ilk ` | Contract for the collateral being added to the vault. |
+| `  ladle  `  | Ladle for Yield v2.                                      |
+| `  posted  `   | Amount of collateral being deposited.      |
+| `  deadline  `   | Validity of the off-chain signature, as an unix time.      |
+| `  v, r, s  `   | Off-chain signature.      |
+| `  ilkJoin  `  | Contract holding ilk for Yield v2.                                      |
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
+| `  ignored  `   | Receiver of any tokens produced by pour, which is not producing any in this batch.      |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
 
-`ladle`: Ladle for Yield v2.
-
-`posted`: Amount of collateral being deposited.
-
-`deadline`: Validity of the off-chain signature, as an unix time.
-
-`v, r, s`: Off-chain signature.
-
-`ilkJoin`: Contract holding ilk for Yield v2.
-
-`vaultId`: Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.
-
-`ignored`: Receiver of any tokens produced by pour, which is not producing any in this batch.
-
-`0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
 ### Post ERC1155 collateral (Ladle Approval)
 
 This batch adds a token within an ERC1155 contract as collateral to a vault, using a Ladle module. Off-chain signatures are not available for ERC1155 and a previous transaction is required to approve the Ladle. It can be combined with previous actions that create vaults.
@@ -123,24 +184,18 @@ This batch adds a token within an ERC1155 contract as collateral to a vault, usi
     ladle.pourAction(vaultId, ignored, posted, 0),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| ` ilk ` | Contract for the collateral being added to the vault. |
+| ` id ` | ERC1155 id for the collateral being added to the vault. |
+| `  ladle  `  | Ladle for Yield v2.                                      |
+| `  transfer1155Module  `  | Ladle Module with ERC1155 transferring capabilities.                                      |
+| `  posted  `   | Amount of collateral being deposited.      |
+| `  ilkJoin  `  | Contract holding ilk for Yield v2.                                      |
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
+| `  ignored  `   | Receiver of any tokens produced by pour, which is not producing any in this batch.      |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
 
-`ilk`: ERC1155 contract for the collateral being added to the vault.
-
-`id`: ERC1155 id for the collateral being added to the vault.
-
-`ladle`: Ladle for Yield v2.
-
-`transfer1155Module`: Ladle Module with ERC1155 transferring capabilities.
-
-`posted`: Amount of collateral being deposited.
-
-`ilkJoin`: Contract holding ilk for Yield v2.
-
-`vaultId`: Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.
-
-`ignored`: Receiver of any tokens produced by pour, which is not producing any in this batch.
-
-`0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
 
 **Note:** Approval for an ERC1155 is executed as `erc1155.setApprovalForAll(spender, true)` and gives permission to spender to take any amount of any token inside `erc1155` from the caller.
 
@@ -153,15 +208,15 @@ This batch removes an amount of an ERC20 collateral from a vault. Destroying the
     ladle.pourAction(vaultId, receiver, withdrawn.mul(-1), 0),
     ladle.destroy(vaultId),
   ])
+
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
+| `  receiver  `   | Receiver of the collateral.      |
+| `  withdrawn  `   | Collateral withdrawn. Note it is a negative.      |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
 
-`vaultId`: Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.
-
-`receiver`: Receiver of the collateral.
-
-`withdrawn`: Collateral withdrawn. Note it is a negative.
-
-`0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
 
 **Limits:** The collateral token balance of the related Join.
 
@@ -176,15 +231,14 @@ This batch adds Ether as collateral to a vault. It can be combined with previous
   ])
 ```
 
-`ethId`: Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  ethId  `   | Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.  |
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.  |
+| `  posted  `   | Amount of collateral being deposited.  |
+| `  ignored  `   | Receiver of any tokens produced by pour, which is not producing any in this batch.  |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.  |
 
-`vaultId`: Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.
-
-`posted`: Amount of collateral being deposited.
-
-`ignored`: Receiver of any tokens produced by pour, which is not producing any in this batch.
-
-`0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
 
 ### Withdraw Ether collateral
 
@@ -200,17 +254,14 @@ The Ether withdrawn will be temporarily held by the Ladle until the end of the t
   ])
 ```
 
-`vaultId`: Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.
-
-`ladle`: Ladle for Yield v2.
-
-`withdrawn`: Collateral withdrawn. Note it is a negative.
-
-`0`: Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.
-
-`ethId`: Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.
-
-`receiver`: Receiver of the collateral.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  withdrawn  `   | Collateral withdrawn. Note it is a negative.      |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
+| `  ethId  `   | Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.      |
+| `  receiver  `   | Receiver of the collateral.      |
 
 **Limits:** The WETH balance of the related Join.
 
@@ -223,14 +274,14 @@ This action borrows fyToken from an existing vault. It can be combined with prev
     ladle.pourAction(vaultId, receiver, 0, borrowed),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
+| `  receiver  `   | Receiver of the collateral.      |
+| `  0  `   | Collateral change, zero in this case.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  borrowed  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver.      |
 
-`vaultId`: Vault to add the debt to. Set to 0 if the vault was created as part of this same batch.
-
-`receiver`: Receiver of the fyTokens.
-
-`0`: Collateral change, zero in this case.
-
-`borrowed`: Amount of debt to add to the vault, and fyTokens to send to the receiver.
 
 ### Borrow underlying
 
@@ -242,15 +293,14 @@ This action borrows fyToken from an existing vault, which is then exchanged for 
   ])
 ```
 
-`vaultId`: Vault to add the debt to. Set to 0 if the vault was created as part of this same batch.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
+| `  receiver  `   | Receiver of the collateral.      |
+| `  0  `   | Collateral change, zero in this case      |
+| `  borrowed  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver.      |
+| `  ladle  `   | Maximum debt to accept for the vault in fyToken terms.      |
 
-`receiver`: Receiver of the underlying tokens.
-
-`0`: Collateral change, zero in this case.
-
-`borrowed`: Amount of underlying tokens to receive.
-
-`maximumDebt`: Maximum debt to accept for the vault in fyToken terms.
 
 ### Post ERC20 collateral and borrow underlying
 
@@ -263,8 +313,22 @@ This batch is the simplest and most efficient manner for new users to borrow und
     ladle.serveAction(0, receiver, posted, borrowed, maximumDebt),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| ` seriesId ` | Series, and therefore underlying, that will be used for borrowing with this vault. |
+| `  ilkId  `  | Collateral that will be used with this vault.                                      |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
+| ` ilk ` | Contract for the collateral being added to the vault. |
+| `  ilkJoin  `  | Contract holding ilk for Yield v2.                                      |
+| `  allowance  `  | Allowance for transfer.                                      |
+| `  deadline  `   | Validity of the off-chain signature, as an unix time.      |
+| `  v, r, s  `   | Off-chain signature.      |
+| `  0  `   | Collateral change, zero in this case      |
+| `  receiver  `   | Receiver of the collateral.      |
+| `  posted  `   | Amount of collateral being deposited.      |
+| `  borrowed  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver.      |
+| `  maximumDebt  `   | Maximum amount of debt      |
 
-All parameters have been described in previous actions.
 
 ## Debt Repayment
 
@@ -281,21 +345,16 @@ Combine with a base permit for the ladle if not present.
   ])
 ```
 
-`base`: Contract for the underlying tokens.
-
-`ladle`: Ladle for Yield v2.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`debtRepaidInBase`: Amount of underlying that the user will spend repaying debt.
-
-`vaultId`: Vault to repay debt from.
-
-`ignored`: Receiver of the underlying tokens. None in this case.
-
-`0`: Collateral change, zero in this case.
-
-`minimumFYTokenDebtRepaid`: Minimum debt repayment to be accepted, in fyToken terms.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  base  `   | Contract for the underlying tokens.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.      |
+| `  debtRepaidInBase  `   | Amount of underlying that the user will spend repaying debt.      |
+| `  vaultId  `   | Vault to repay debt from.      |
+| `  ignored  `   | Receiver of the underlying tokens. None in this case..      |
+| `  0  `   | Collateral change, zero in this case.      |
+| `  minimumFYTokenDebtRepaid  `   | Minimum debt repayment to be accepted, in fyToken terms.      |
 
 **Limits:** The real fyToken reserves of the related pool.
 
@@ -311,16 +370,13 @@ Combine with a base permit for the ladle if not present.
     ladle.repayVaultAction(vaultId, ignored, 0, maxBasePaid),
   ])
 ```
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`maxBasePaid`: Maximum amount of underlying that the user will spend repaying debt.
-
-`vaultId`: Vault to repay debt from.
-
-`ignored`: Receiver of the underlying tokens. None in this case.
-
-`0`: Collateral change, zero in this case.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.      |
+| `  maxBasePaid  `   | Maximum amount of underlying that the user will spend repaying debt.      |
+| `  vaultId  `   | Vault to repay debt from.      |
+| `  ignored  `   | Receiver of the underlying tokens. None in this case..      |
+| `  0  `   | Collateral change, zero in this case.      |
 
 **Limits:** The real fyToken reserves of the related pool.
 
@@ -335,14 +391,13 @@ Combine with a base permit for the base join if not present.
     ladle.closeAction(vaultId, ignored, 0, debtRepaidInFYToken),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  vaultId  `   | Vault to repay debt from.      |
+| `  ignored  `   | Receiver of the underlying tokens. None in this case..      |
+| `  0  `   | Collateral change, zero in this case.      |
+| `  debtRepaidInFYToken  `   | Debt to be repaid in fyToken terms. Please do the conversion off-chain using the rate oracle.      |
 
-`vaultId`: Vault to repay debt from.
-
-`ignored`: Receiver of the underlying tokens. None in this case.
-
-`0`: Collateral change, zero in this case.
-
-`debtRepaidInFYToken`: Debt to be repaid in fyToken terms. Please do the conversion off-chain using the rate oracle.
 
 ### Redeem
 
@@ -377,14 +432,13 @@ This batch will combine two vaults of the same series and ilk into one, adding t
       ladle.destroyAction(vaultId1),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  vaultId1  `   | First vault to merge. This vault will be destroyed.      |
+| `  vaultId2  `   | Second vault to merge.       |
+| ` collateral  `   | Collateral amount in the first vault      |
+| `  debt  `   | Debt amount in the first vault in fyToken terms.      |
 
-`vaultId1`: First vault to merge. This vault will be destroyed.
-
-`vaultId2`: Second vault to merge.
-
-`collateral`: Collateral amount in the first vault.
-
-`debt`: Debt amount in the first vault in fyToken terms.
 
 ### Split a vault into two
 
@@ -397,17 +451,14 @@ This batch will split part of the debt and collateral of one vault into a new va
   ])
 ```
 
-`seriesId`: Series for the vault we are splitting debt from.
-
-`ilkId`: Collateral for the vault that we are splitting collateral from.
-
-`vaultId`: Vault to split debt and collateral from.
-
-`0`: Indicates the second vault will be built as a result of this batch.
-
-`collateral`: Collateral amount to split from the original vault.
-
-`debt`: Debt amount to split from the original vault.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  seriesId  `   | Series for the vault we are splitting debt from.      |
+| `  ilkId  `   | Collateral for the vault that we are splitting collateral from.      |
+| `  vaultId  `   | Vault to split debt and collateral from.      |
+| `  0  `   | Indicates the second vault will be built as a result of this batch.       |
+| ` collateral  `   | Collateral amount in the first vault      |
+| `  debt  `   | Debt amount in the first vault in fyToken terms.      |
 
 ### Roll debt before maturity
 
@@ -418,14 +469,13 @@ This action changes the debt in a vault, and the vault itself, from one series t
     ladle.rollAction(vaultId, newSeriesId, 2, maxNewDebt),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  vaultId  `   | Vault to roll.      |
+| `  newSeriesId  `   | Series to roll the debt into.       |
+| ` 2  `   | Multiplier applied to the vault debt in base terms, in order to get an fyToken flash loan to cover the roll.      |
+| `  maxNewDebt  `   | Maximum amount of debt, in fyToken terms, that will be accepted after the rolling.      |
 
-`vaultId`: Vault to roll.
-
-`newSeriesId`: Series to roll the debt into.
-
-`2`: Multiplier applied to the vault debt in base terms, in order to get an fyToken flash loan to cover the roll.
-
-`maxNewDebt`: Maximum amount of debt, in fyToken terms, that will be accepted after the rolling.
 
 **Limits:** The base reserves of the related pool.
 
@@ -444,18 +494,15 @@ Lending is selling underlying for fyToken in a YieldSpace pool. The pool won’t
     ladle.routeAction(pool, ['sellBase', [receiver, minimumFYTokenReceived]),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  base  `   | Contract for the underlying tokens.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| ` pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.      |
+| `  baseSold  `   | Amount of underlying that the user will lend.      |
+| `  receiver  `   | Receiver for the fyToken representing the lending position.      |
+| `  minimumFYTokenReceived  `   | Minimum fyToken to be accepted.      |
 
-`base`: Contract for the underlying tokens.
-
-`ladle`: Ladle for Yield v2.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`baseSold`: Amount of underlying that the user will lend.
-
-`receiver`: Receiver for the fyToken representing the lending position.
-
-`minimumFYTokenReceived`: Minimum fyToken to be accepted.
 
 **Limits:** The virtual fyToken reserves, minus the base reserves, divided by two.
 
@@ -472,18 +519,15 @@ Closing a lending position before maturity is the inverse of lending, meaning se
     ladle.routeAction(pool, ['sellFYToken', [receiver, minimumBaseTokenReceived]),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  fyToken  `   | Contract for the fyToken sold.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| ` pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.      |
+| `  fyTokenSold  `   | Amount of fyToken that the user will sell.      |
+| `  receiver  `   | Receiver for the underlying produced on ending the lending position.      |
+| `  minimumBaseTokenReceived  `   | Minimum underlying to be accepted.      |
 
-`fyToken`: Contract for the fyToken sold.
-
-`ladle`: Ladle for Yield v2.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`fyTokenSold`: Amount of fyToken that the user will sell.
-
-`receiver`: Receiver for the underlying produced on ending the lending position.
-
-`minimumBaseTokenReceived`: Minimum underlying to be accepted.
 
 **Limits:** The base reserves of the related pool.
 
@@ -495,9 +539,10 @@ Closing a lending position after maturity is achieved by redeeming the fyToken r
   await fyToken.redeem(receiver, fyTokenToRedeem)
 ```
 
-`receiver`: Receiver for the underlying produced on redemption.
-
-`fyTokenToRedeem`: Amount of fyToken to redeem.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  receiver  `   | Receiver for the underlying produced on redemption.      |
+| `  fyTokenToRedeem  `   | Amount of fyToken to redeem.      |
 
 ### Roll lending before maturity
 
@@ -513,27 +558,21 @@ Rolling lending before maturity means selling fyToken for underlying, which is d
     ladle.routeAction(pool2, ['sellBase', [receiver, minimumFYTokenReceived]),
   ])
 ```
-
-`fyToken`: Contract for the fyToken sold.
-
-`ladle`: Ladle for Yield v2.
-
-`fyTokenRolled`: Amount of fyToken that the user will roll.
-
-`pool1`: Contract YieldSpace pool trading base and the fyToken for the series to be rolled from.
-
-`pool2`: Contract YieldSpace pool trading base and the fyToken for the series to be rolled into.
-
-`0`: We don’t need to check for slippage on both trades, only on the last one.
-
-`receiver`: Receiver of the fyToken of the new series being obtained.
-
-`minimumFYTokenReceived`: Minimum fyToken of the series rolling into to be accepted.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  fyToken  `   | Contract for the fyToken sold.     |
+| `  ladle  `   | Ladle for Yield v2.     |
+| ` fyTokenRolled  `   | Amount of fyToken that the user will roll.     |
+| `  pool1  `   | Contract YieldSpace pool trading base and the fyToken for the series to be rolled from.     |
+| `  pool2  `   | Contract YieldSpace pool trading base and the fyToken for the series to be rolled into.     |
+| `  0  `   | We don’t need to check for slippage on both trades, only on the last one.     |
+| `  receiver  `   | Receiver of the fyToken of the new series being obtained.     |
+| `  minimumFYTokenReceived  `   | Minimum fyToken of the series rolling into to be accepted.     |
 
 <p style="text-align: right">
 <strong>Limits:</strong> The base reserves of the first pool. The virtual fyToken reserves, minus the base reserves, divided by two, of the second pool.</p>
 
-### Roll lending after maturity - RC10
+### Roll lending after maturity
 
 Rolling lending after maturity means redeeming fyToken for underlying, which is deposited into another pool and sold for fyToken of a second series, but sharing the underlying denomination with the first one.
 
@@ -547,20 +586,15 @@ Rolling lending after maturity means redeeming fyToken for underlying, which is 
     ladle.routeAction(pool2, ['sellBase', [receiver, minimumFYTokenReceived]),
   ])
 ```
-
-`fyToken`: Contract for the fyToken sold.
-
-`ladle`: Ladle for Yield v2.
-
-`fyTokenToRoll`: Amount of fyToken that the user will roll.
-
-`seriesId`: Yield v2 id for the series.
-
-`pool2`: Contract YieldSpace pool trading base and the fyToken for the series to be rolled into.
-
-`receiver`: Receiver of the fyToken of the new series being obtained.
-
-`minimumFYTokenReceived`: Minimum fyToken of the series rolling into to be accepted.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  fyToken  `   |  Contract for the fyToken sold.   |
+| `  ladle  `   |  Ladle for Yield v2.   |
+| ` fyTokenToRoll  `   |  Amount of fyToken that the user will roll.   |
+| `  seriesId  `   |  Yield v2 id for the series.   |
+| `  pool2  `   |  Contract YieldSpace pool trading base and the fyToken for the series to be rolled into.   |
+| `  receiver  `   |  Receiver of the fyToken of the new series being obtained.   |
+| `  minimumFYTokenReceived  `   |  Minimum fyToken of the series rolling into to be accepted.   |
 
 **Limits:** The virtual fyToken reserves, minus the base reserves, divided by two, of the second pool.
 
@@ -584,30 +618,22 @@ An option can be shown to the user where an amount of underlying is taken to pro
     ladle.routeAction(pool, ['mint', [receiver, receiver, minRatio, maxRatio]),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  base  `   | Contract for the underlying tokens.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| ` pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.      |
+| `  baseToPool  `   | Amount of underlying that the user will provide liquidity with.      |
+| `  vaultId  `   | Vault to add the debt to. Set to 0 if the vault was created as part of this same batch.      |
+| `  0  `   | Collateral change, zero in this case.      |
+| `  fyTokenBorrowed  `   | Amount of fyToken that the user will borrow and provide liquidity with.      |
+| ` receiver  `   | Receiver for the LP tokens.      |
+| `  true  `   | Make any rounding surplus to be fyToken, left in the pool.      |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.      |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.      |
 
-`base`: Contract for the underlying tokens.
 
-`ladle`: Ladle for Yield v2.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`baseToPool`: Amount of underlying that the user will provide liquidity with.
-
-`vaultId`: Vault to add the debt to. Set to 0 if the vault was created as part of this same batch.
-
-`0`: Collateral change, zero in this case.
-
-`fyTokenBorrowed`: Amount of fyToken that the user will borrow and provide liquidity with.
-
-`receiver`: Receiver for the LP tokens.
-
-`true`: Make any rounding surplus to be fyToken, left in the pool.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
-
-**Provide liquidity by borrowing, using only underlying**
+### Provide liquidity by borrowing, using only underlying
 
 This batch relies on creating a vault where the underlying is used as collateral to borrow the fyToken of the same underlying.
 
@@ -626,35 +652,24 @@ With this vault built, an amount of underlying is used to provide liquidity. Tha
   ])
 ```
 
-`seriesId`: Series, and therefore underlying, that will be used for borrowing with this vault.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  seriesId  `   | Series, and therefore underlying, that will be used for borrowing with this vault.      |
+| `  ilkId  `   | Collateral that will be used with this vault.      |
+| ` base  `   | Contract for the underlying tokens.      |
+| `  baseJoin  `   | Contract holding base for Yield v2.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  totalBase  `   | Amount of underlying that the user will provide liquidity with.      |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.      |
+| ` baseToPool  `   | Portion of the underlying supplied that will be directly sent to the pool.      |
+| `  baseToFYtoken  `   | Portion of the underlying supplied that will be used to borrow fyToken, sent to the pool.      |
+| `  0  `   | Vault to add the debt to, set to 0 as the vault was created as part of this same batch.      |
+| `  receiver  `   | Receiver for the LP tokens.      |
+| `  true  `   | Make any rounding surplus to be fyToken, left in the pool.      |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.      |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.      |
 
-`ilkId`: Collateral that will be used with this vault.
-
-`base`: Contract for the underlying tokens.
-
-`baseJoin`: Contract holding base for Yield v2.
-
-`ladle`: Ladle for Yield v2.
-
-`totalBase`: Amount of underlying that the user will provide liquidity with.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`baseToPool`: Portion of the underlying supplied that will be directly sent to the pool.
-
-`baseToFYtoken`: Portion of the underlying supplied that will be used to borrow fyToken, sent to the pool.
-
-`0`: Vault to add the debt to, set to 0 as the vault was created as part of this same batch.
-
-`receiver`: Receiver for the LP tokens.
-
-`true`: Make any rounding surplus to be fyToken, left in the pool.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
-
-**Provide liquidity by buying**
+### Provide liquidity by buying
 
 When providing liquidity by buying, the user buys an amount of fyToken from the pool. The amount of fyToken to buy would be calculated iteratively on the frontend, since there isn’t a closed form formula to find it.
 
@@ -670,27 +685,23 @@ The maximum amount of base to use will be transferred to the pool, and any surpl
   ])
 ```
 
-`base`: Contract for the underlying tokens.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  base  `   | Contract for the underlying tokens.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.      |
+| ` baseWithSlippage  `   | Maximum amount of underlying that the user will provide liquidity with.      |
+| `  fyTokenToBuy  `   | FYToken that the user will buy using part of the underlying, to provide liquidity with.      |
+| `  receiver  `   | Receiver for the LP tokens.      |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.      |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.      |
 
-`ladle`: Ladle for Yield v2.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`baseWithSlippage`: Maximum amount of underlying that the user will provide liquidity with.
-
-`fyTokenToBuy`: FYToken that the user will buy using part of the underlying, to provide liquidity with.
-
-`receiver`: Receiver for the LP tokens.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
 
 **Limits:** The real fyToken reserves of the pool, minus the base reserves, divided by two, must be below `fyTokenToBuy`.
 
 **Remove Liquidity set: **
 
-**1. Remove liquidity and repay - RC10**
+### Remove liquidity and repay
 
 The reverse of borrowing to provide liquidity. It is possible to estimate in the frontend whether using underlying to repay debt will be necessary, and if not the base can be sent to `receiver` in `burn`, and the last action omitted. Any surplus is sent to the `receiver`.
 
@@ -705,24 +716,19 @@ The reverse of borrowing to provide liquidity. It is possible to estimate in the
     ladle.closeFromLadleAction(vaultId, receiver),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.`   |
+| `  ladle  `   | Ladle for Yield v2.   |
+| ` lpTokensBurn  `   | `Amount of LP tokens that the user will burn.   |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.   |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.   |
+| `  vaultId  `   | Vault to repay debt from.   |
+| `  receiver  `   | Receiver for the LP tokens.   |
 
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
+**Usage:** Use before maturity if borrow and pool was used, and if debt is above `minFYTokenReceived`.
 
-`ladle`: Ladle for Yield v2.
-
-`lpTokensBurnt: `Amount of LP tokens that the user will burn.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
-
-`vaultId`: Vault to repay debt from.
-
-`receiver`: Receiver for the LP tokens.
-
-**Usage: **Use before maturity if borrow and pool was used, and if debt is above `minFYTokenReceived`.
-
-**2. Remove liquidity, repay and sell - RC10**
+### Remove liquidity, repay and sell
 
 If there is a small amount of debt to repay, it might be best for the user to repay it with fyToken from the burn, and then receive the fyToken surplus.
 
@@ -736,18 +742,15 @@ If there is a small amount of debt to repay, it might be best for the user to re
     ladle.repayFromLadleAction(vaultId, receiver),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  ladle  `   | Ladle for Yield v2. |
+| `  LPTokensBurnt  `   | Amount of LP tokens burnt. |
+| ` pool  `   | Contract YieldSpace pool trading base and the fyToken for the series. |
+| `  receiver  `   | Receiver for the resulting tokens. |
+| `  vaultId  `   | Vault to repay debt from. |
 
-`ladle`: Ladle for Yield v2.
-
-`LPTokensBurnt`: Amount of LP tokens burnt.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`receiver`: Receiver for the resulting tokens.
-
-`vaultId`: Vault to repay debt from.
-
-**Usage: **Use before maturity if borrow and pool was used, and if debt is below fyToken received.
+**Usage:** Use before maturity if borrow and pool was used, and if debt is below fyToken received.
 
 **Limits:** The debt of the user plus the base reserves of the pool must be lower than the fyToken received.
 
@@ -755,7 +758,7 @@ If there is a small amount of debt to repay, it might be best for the user to re
 
 **Note**: Cheaper than “Remove liquidity and repay”. Sometimes might make sense to leave vaults with debt instead of spending the gas to repay them.
 
-**3. Remove liquidity and redeem - RC10**
+### Remove liquidity and redeem
 
 After maturity, fyToken can be redeemed by sending it to the fyToken contract.
 
@@ -770,27 +773,23 @@ After maturity, fyToken can be redeemed by sending it to the fyToken contract.
   ])
 ```
 
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.  |
+| `  ladle  `   | Ladle for Yield v2.  |
+| ` lpTokensBurn  `   | `Amount of LP tokens that the user will burn.  |
+| `  fyToken  `   | FYToken contract for the pool.  |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.  |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.  |
+| `  seriesId  `   | SeriesId for the fyToken contract.  |
+| ` receiver  `   | Receiver for the LP tokens.  |
+| `  0  `   | The amount of fyToken to redeem is whatever was sent to the fyToken contract.  |
 
-`ladle`: Ladle for Yield v2.
 
-`lpTokensBurnt: `Amount of LP tokens that the user will burn.
-
-`fyToken`: FYToken contract for the pool.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
-
-`seriesId`: SeriesId for the fyToken contract.
-
-`receiver`: Receiver for the LP tokens.
-
-`0`: The amount of fyToken to redeem is whatever was sent to the fyToken contract.
 
 **Usage:** Use always after maturity, if allowed by accounting. The vault can be forgotten.
 
-**4. Remove liquidity and sell - RC10**
+### Remove liquidity and sell
 
 Before maturity, the fyToken resulting from removing liquidity can be sold within the pool. This is best if there isn’t any debt to repay, and the `receiver` doesn’t want to keep the fyToken until redemption.
 
@@ -803,18 +802,14 @@ Before maturity, the fyToken resulting from removing liquidity can be sold withi
     ladle.routeAction(pool, ['burnForBase', [receiver, minRatio, maxRatio]),
   ])
 ```
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`ladle`: Ladle for Yield v2.
-
-`lpTokensBurnt: `Amount of LP tokens that the user will burn.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
-
-`receiver`: Receiver for the LP tokens.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.     |
+| `  ladle  `   | Ladle for Yield v2.     |
+| ` lpTokensBurn  `   | `Amount of LP tokens that the user will burn.     |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.     |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.     |
+| `  receiver  `   | Receiver for the LP tokens.     |
 
 **Limits:** The fyToken plus base received must be lower than the base reserves of the pool.
 
@@ -822,7 +817,7 @@ Before maturity, the fyToken resulting from removing liquidity can be sold withi
 
 **Note:** Can also be used close to maturity in “borrow and pool” to save gas .
 
-**5. Remove liquidity, redeem and close - RC10**
+### Remove liquidity, redeem and close
 
 When removing liquidity after maturity, all the proceeds can be converted into base to repay without rolling the debt in the vault.
 
@@ -838,25 +833,21 @@ When removing liquidity after maturity, all the proceeds can be converted into b
   ])
 ```
 
-`ladle`: Ladle for Yield v2.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  ladle  `   |  Ladle for Yield v2.      |
+| `  LPTokensBurnt  `   |  Amount of LP tokens burnt.      |
+| ` pool  `   |  Contract YieldSpace pool trading base and the fyToken for the series.      |
+| `  fyToken  `   |  FYToken contract for the pool.      |
+| `  minRatio  `   |  Minimum base/fyToken ratio accepted in the pool reserves.      |
+| `  maxRatio  `   |  Maximum base/fyToken ratio accepted in the pool reserves.      |
+| `  seriesId  `   |  Series for the fyToken.      |
+| ` vaultId  `   |  Vault to repay debt from.      |
 
-`LPTokensBurnt`: Amount of LP tokens burnt.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`fyToken`: FYToken contract for the pool.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
-
-`seriesId`: Series for the fyToken.
-
-`vaultId`: Vault to repay debt from.
 
 **Usage:** Don’t use, unless forced to repay vaults.
 
-**Roll liquidity before maturity**
+### Roll liquidity before maturity
 
 To roll liquidity before maturity, the simplest option is to use the pools themselves to sell and buy fyToken of the two involved series at market rates. The LP tokens of the pool we are rolling out from are converted into underlying using the pool itself, and then split into underlying and fyToken in the proportions of the second pool also using that second pool itself.
 
@@ -872,26 +863,21 @@ As with “Provide liquidity by buying”, the frontend needs to calculate the a
     ladle.routeAction(pool2, ['mintWithBase', [receiver, receiver, fyTokenToBuy, minRatio, maxRatio]),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  ladle  `   | Ladle for Yield v2.     |
+| `  pool1  `   | Contract YieldSpace pool trading base and the fyToken for the series we are rolling out from.     |
+| ` pool2  `   | Contract YieldSpace pool trading base and the fyToken for the series we are rolling into.     |
+| `  poolTokens  `   | Amount of LP tokens of the first pool we are rolling into the second pool.     |
+| `  receiver  `   | Receiver for the LP tokens of the second pool.     |
+| `  fyTokenToBuy  `   | FYToken that the user will buy using part of the underlying, to provide liquidity with.     |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.     |
+| ` maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.     |
 
-`ladle`: Ladle for Yield v2.
-
-`pool1`: Contract YieldSpace pool trading base and the fyToken for the series we are rolling out from.
-
-`pool2`: Contract YieldSpace pool trading base and the fyToken for the series we are rolling into.
-
-`poolTokens`: Amount of LP tokens of the first pool we are rolling into the second pool.
-
-`receiver`: Receiver for the LP tokens of the second pool.
-
-`fyTokenToBuy`: FYToken that the user will buy using part of the underlying, to provide liquidity with.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
 
 **Limits:** Base reserves of the first pool, the virtual fyToken reserves, minus the base reserves, divided by two, of the second pool.
 
-**Provide liquidity to strategy by borrowing**
+### Provide liquidity to strategy by borrowing
 
 Providing liquidity to a strategy is identical to providing liquidity to a pool, with an added action at the end to convert from LP tokens to strategy tokens.
 
@@ -907,30 +893,22 @@ Providing liquidity to a strategy is identical to providing liquidity to a pool,
     ladle.routeAction(strategy, ['mint', [receiver]),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  base  `   | Contract for the underlying tokens.    |
+| `  baseJoin  `   | Contract holding base for Yield v2.    |
+| ` baseToPool  `   | Portion of the underlying supplied that will be directly sent to the pool.    |
+| `  baseToFYtoken  `   | Portion of the underlying supplied that will be used to borrow fyToken, sent to the pool.    |
+| `  0  `   | Vault to add the debt to, set to 0 as the vault was created as part of this same batch.    |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.    |
+| `  strategy  `   | Contract for investing in Yield v2 tokens.    |
+| ` true  `   | Make any rounding surplus to be fyToken, left in the pool.    |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.    |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.    |
+| `  receiver  `   | Receiver for the LP tokens.    |
 
-`base`: Contract for the underlying tokens.
 
-`baseJoin`: Contract holding base for Yield v2.
-
-`baseToPool`: Portion of the underlying supplied that will be directly sent to the pool.
-
-`baseToFYtoken`: Portion of the underlying supplied that will be used to borrow fyToken, sent to the pool.
-
-`0`: Vault to add the debt to, set to 0 as the vault was created as part of this same batch.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`strategy`: Contract for investing in Yield v2 tokens.
-
-`true`: Make any rounding surplus to be fyToken, left in the pool.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
-
-`receiver`: Receiver for the LP tokens.
-
-**Provide liquidity to strategy by buying**
+### Provide liquidity to strategy by buying
 
 Providing liquidity to a strategy is identical to providing liquidity to a pool, with an added action at the end to convert from LP tokens to strategy tokens. Prepend this batch with actions to provide permits as necessary. The amount of fyToken to buy would be calculated iteratively on the frontend, since there isn’t a closed form formula to find it.
 
@@ -941,30 +919,20 @@ Providing liquidity to a strategy is identical to providing liquidity to a pool,
     ladle.routeAction(strategy, ['mint', [receiver]),
   ])
 ```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  base  `   | Contract for the underlying tokens.     |
+| `  ladle  `   | Ladle for Yield v2.     |
+| ` pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.     |
+| `  baseWithSlippage  `   | Maximum amount of underlying that the user will provide liquidity with.     |
+| `  fyTokenToBuy  `   | FYToken that the user will buy using part of the underlying, to provide liquidity with.     |
+| `  receiver  `   | Receiver for the LP tokens.     |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.     |
+| ` maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.     |
+| `  strategy  `   | Contract for investing in Yield v2 tokens.     |
+| `  receiver  `   | Receiver for the LP tokens.     |
 
-`base`: Contract for the underlying tokens.
-
-`ladle`: Ladle for Yield v2.
-
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`baseWithSlippage`: Maximum amount of underlying that the user will provide liquidity with.
-
-`fyTokenToBuy`: FYToken that the user will buy using part of the underlying, to provide liquidity with.
-
-`receiver`: Receiver for the LP tokens.
-
-`minRatio`: Minimum base/fyToken ratio accepted in the pool reserves.
-
-`maxRatio`: Maximum base/fyToken ratio accepted in the pool reserves.
-
-`strategy`: Contract for investing in Yield v2 tokens.
-
-`receiver`: Receiver for the LP tokens.
-
-**Limits: **The virtual fyToken reserves, minus the base reserves, divided by two, of the pool must be below `fyTokenToBuy`.
-
-**6. Remove liquidity from strategy - RC10**
+### Remove liquidity from strategy
 
 Removing liquidity from a strategy has an initial two steps in which the strategy tokens are burnt for LP tokens deposited in the appropriate pool, and then continues like a normal batch to remove liquidity. Note that the vault debt could be in a different fyToken than received, if the strategy rolled pools. The debt in the vault would need to be rolled for the batches that repay with fyToken to work. Remember that if there are several actions with slippage protection, we only need to set a value in the last one.
 
@@ -980,27 +948,25 @@ Removing liquidity from a strategy has an initial two steps in which the strateg
   ])
 ```
 
-`strategy`: Contract for investing in Yield v2 tokens.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  strategy  `   | Contract for investing in Yield v2 tokens.   |
+| `  ladle  `   | Ladle for Yield v2.   |
+| ` strategyTokensBurnt  `   | Amount of strategy tokens burnt.   |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.   |
+| `  minBaseReceive  `   | Minimum amount of base that will be accepted.   |
+| `  minFYTokenReceive  `   | `Minimum amount of fyToken that will be accepted.   |
 
-`ladle`: Ladle for Yield v2.
 
-`strategyTokensBurnt`: Amount of strategy tokens burnt.
+**Usage:** Use burn and sell for both ‘borrow and pool’ and ‘buy and pool’ if possible. Defined as the user not having a vault of the matching series with the underlying as collateral.
 
-`pool`: Contract YieldSpace pool trading base and the fyToken for the series.
-
-`minBaseReceived:` Minimum amount of base that will be accepted.
-
-`minFYTokenReceived: `Minimum amount of fyToken that will be accepted.
-
-**Usage: **Use burn and sell for both ‘borrow and pool’ and ‘buy and pool’ if possible. Defined as the user not having a vault of the matching series with the underlying as collateral.
-
-**Limits: **If there is too much fyToken received to be sold in the pool, the fyToken received will need to be held until it can be sold or redeemed.
+**Limits:** If there is too much fyToken received to be sold in the pool, the fyToken received will need to be held until it can be sold or redeemed.
 
 **Note:** Unlikely to remove liquidity before maturity with strategies. Unless sunsetting strategy.
 
 ## V1 Liquidity Migration
 
-**Use V1 Liquidity Tokens to provide liquidity to V2**
+### Use V1 Liquidity Tokens to provide liquidity to V2
 
 To migrate v1 liquidity to v2, we start by converting the v1 Liquidity Tokens into Dai, which then can be used later in the same batch to become v2 liquidity, either by borrowing or by buying.
 
@@ -1020,20 +986,17 @@ Once the Dai is in the user’s wallet, proceed by appending any of the other li
     ...
   ])
 ```
-
-`v1Pool`: V1 YieldSpace Pool matching the tokens to be used.
-
-`ladle`: Ladle for Yield v2.
-
-`poolTokens`: Amount of v1 liquidity tokens that the user will provide liquidity with.
-
-`receiver`: Receiver for the LP tokens. If using buy and pool, it would be the v2 pool.
-
-`minimumFYDaiPrice`: Minimum FYDai price to be accepted.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  v1Pool  `   | V1 YieldSpace Pool matching the tokens to be used.    |
+| `  ladle  `   | Ladle for Yield v2.    |
+| ` poolTokens  `   | Amount of v1 liquidity tokens that the user will provide liquidity with.    |
+| `  receiver  `   | Receiver for the LP tokens. If using buy and pool, it would be the v2 pool.    |
+| `  minimumFYDaiPrice  `   | Minimum FYDai price to be accepted.    |
 
 ## stETH Wrapping/Unwrapping
 
-**Wrap stEth into wstETH**
+### Wrap stEth into wstETH
 
 Users can provide stEth as collateral, which we wrap into WstEth when sending it to the Join.
 
@@ -1050,15 +1013,15 @@ Users can provide stEth as collateral, which we wrap into WstEth when sending it
   ])
 ```
 
-`lidoWrapper`: LidoWrapperHandler that wraps/unwraps stEth in a batch.
-
-`stEthTokens`: Amount of v1 liquidity tokens that the user will provide liquidity with.
-
-`wstEthJoin`: Join for wstEther.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  lidoWrapper  `   |  LidoWrapperHandler that wraps/unwraps stEth in a batch.  |
+| `  stEthTokens  `   |  Amount of v1 liquidity tokens that the user will provide liquidity with.  |
+| ` wstEthJoin  `   |  Join for wstEther.  |
 
 **Note:** Calculate the amount of wstEth obtained from the wstEth contract by calling wstEth.getWstEthByStEth.
 
-**Unwrap wstEth into stETH**
+### Unwrap wstEth into stETH
 
 When users remove wstEth from the platform, we unwrap it to stETH before giving it to them. Drop the wstETH in the lidoWrapper and append this to an appropriate batch.
 
@@ -1070,7 +1033,8 @@ When users remove wstEth from the platform, we unwrap it to stETH before giving 
       [receiver]),
   ])
 ```
-
-`receiver`: Receiver for the stEth.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  receiver  `   |  Receiver for the stEth.  |
 
 **Note:** If necessary, calculate the amount of stEth obtained from the wstEth contract by calling wstEth.getStEthBywstEth.
