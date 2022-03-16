@@ -17,28 +17,25 @@
 ```
 ### TABLE OF CONTENTS
 
-[Vault creation, collateral posting, and borrowing](#vault-creation-collateral-posting-and-borrowing)
+[Vault Management](#vault-management)
   - [Build a vault](#build-a-vault)
+  - [Destroy a vault](#destroy-a-vault)
+  - [Merge two vaults into one](#merge-two-vaults-into-one)
+  - [Split a vault into two](#split-a-vault-into-two)
+
+[Collateral and Borrowing](#collateral-and-borrowing)
   - [Post ERC20 collateral (Join Approval)](#post-erc20-collateral-join-approval)
   - [Post ERC20 collateral (Ladle Approval)](#post-erc20-collateral-ladle-approval)
-  - [Post ERC1155 collateral (Ladle Approval)](#post-erc1155-collateral-ladle-approval)
   - [Withdraw ERC20 collateral](#withdraw-erc20-collateral)
-  - [Post Ether as collateral](#post-ether-as-collateral)
   - [Borrow fyToken](#borrow-fytoken)
   - [Borrow underlying](#borrow-underlying)
   - [Post ERC20 collateral and borrow underlying](#post-erc20-collateral-and-borrow-underlying)
-
 
 [Debt Repayment](#debt-repayment)
   - [Repay with underlying before maturity](#repay-with-underlying-before-maturity)
   - [Repay a whole vault with underlying before maturity](#repay-a-whole-vault-with-underlying-before-maturity)
   - [Repay with underlying after maturity](#repay-with-underlying-after-maturity)
   - [Redeem](#redeem)
-
-[Vault Management](#vault-management)
-  - [Destroy a vault](#destroy-a-vault)
-  - [Merge two vaults into one](#merge-two-vaults-into-one)
-  - [Split a vault into two](#split-a-vault-into-two)
   - [Roll debt before maturity](#roll-debt-before-maturity)
 
 [Lending](#lending)
@@ -47,7 +44,6 @@
   - [Close lending after maturity](#close-lending-after-maturity)
   - [Roll lending before maturity](#roll-lending-before-maturity)
   - [Roll lending after maturity](#roll-lending-after-maturity)
-
 
 [Liquidity Providing](#liquidity-providing)
   - [Provide liquidity by borrowing](#provide-liquidity-by-borrowing)
@@ -63,15 +59,17 @@
   - [Provide liquidity to strategy by buying](#provide-liquidity-to-strategy-by-buying)
   - [Remove liquidity from strategy](#remove-liquidity-from-strategy)
 
+[Ether](#ether)
+  - [Post Ether as collateral](#post-ether-as-collateral)
+  - [Withdraw Ether collateral](#withdraw-ether-collateral)
+  - [Redeem fyETH](#redeem-fyeth)
+  - [Provide Ether as liquidity (borrowing)](#provide-ether-as-liquidity-borrowing)
+  - [Provide Ether as liquidity (buying)](#provide-ether-as-liquidity-buying)
+  - [Remove liquidity from Ether pools](#remove-liquidity-from-ether-pools)
 
-[V1 Liquidity Migration](#v1-liquidity-migration)
-  - [Use V1 Liquidity Tokens to provide liquidity to V2](#use-v1-liquidity-tokens-to-provide-liquidity-to-v2)
-
-[stETH Wrapping/Unwrapping](#steth-wrappingunwrapping)
-  - [Wrap stEth into wstETH](#wrap-steth-into-wsteth)
-  - [Unwrap wstEth into stETH](#unwrap-wsteth-into-steth)
-
-
+[ERC1155](#erc1155)
+  - [Post ERC1155 collateral (Ladle Approval)](#post-erc1155-collateral-ladle-approval)
+  - [Withdraw ERC1155 collateral](#withdraw-erc1155-collateral)
 
 
 # Introduction
@@ -114,8 +112,7 @@ ladle.batch(
 
 # Recipes
 
-## Vault creation, collateral posting, and borrowing
----
+## Vault Management
 
 ### Build a vault
 
@@ -132,6 +129,60 @@ This action can be added before any others where a vault is needed.
 | `  ilkId  `  | Collateral that will be used with this vault.                                      |
 | `  salt  `   | Parameter to change the random vaultId created. It can be safely set to zero.      |
 
+
+### Destroy a vault
+
+This action will destroy a vault, provided it has no debt or collateral. Combine with any batch that repays debt and withdraws collateral.
+
+```
+  await ladle.batch([
+      ladle.destroyAction(vaultId),
+  ])
+```
+
+`vaultId`: Vault to destroy.
+
+### Merge two vaults into one
+
+This batch will combine two vaults of the same series and ilk into one, adding their debt and collateral.
+
+```
+  await ladle.batch([
+      ladle.stirAction(vaultId1, vaultId2, collateral, debt),
+      ladle.destroyAction(vaultId1),
+  ])
+```
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  vaultId1  `   | First vault to merge. This vault will be destroyed.      |
+| `  vaultId2  `   | Second vault to merge.       |
+| ` collateral  `   | Collateral amount in the first vault      |
+| `  debt  `   | Debt amount in the first vault in fyToken terms.      |
+
+
+### Split a vault into two
+
+This batch will split part of the debt and collateral of one vault into a new vault.
+
+```
+  await ladle.batch([
+      ladle.buildAction(seriesId, ilkId, 0),
+      ladle.stirAction(vaultId, 0, collateral, debt),
+  ])
+```
+
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  seriesId  `   | Series for the vault we are splitting debt from.      |
+| `  ilkId  `   | Collateral for the vault that we are splitting collateral from.      |
+| `  vaultId  `   | Vault to split debt and collateral from.      |
+| `  0  `   | Indicates the second vault will be built as a result of this batch.       |
+| ` collateral  `   | Collateral amount in the first vault      |
+| `  debt  `   | Debt amount in the first vault in fyToken terms.      |
+
+
+## Collateral and borrowing
+---
 
 ### Post ERC20 collateral (Join Approval)
 
@@ -174,31 +225,6 @@ This batch adds an ERC20 as collateral to a vault. If the ladle already has the 
 | `  ignored  `   | Receiver of any tokens produced by pour, which is not producing any in this batch.      |
 | `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
 
-### Post ERC1155 collateral (Ladle Approval)
-
-This batch adds a token within an ERC1155 contract as collateral to a vault, using a Ladle module. Off-chain signatures are not available for ERC1155 and a previous transaction is required to approve the Ladle. It can be combined with previous actions that create vaults.
-
-```
-  await ladle.batch([
-    ladle.moduleCall(transfer1155Module, transfer(ilk, id, ilkJoin, posted)),
-    ladle.pourAction(vaultId, ignored, posted, 0),
-  ])
-```
-|Param  | Description|
-|--------------|------------------------------------------------------------------------------------|
-| ` ilk ` | Contract for the collateral being added to the vault. |
-| ` id ` | ERC1155 id for the collateral being added to the vault. |
-| `  ladle  `  | Ladle for Yield v2.                                      |
-| `  transfer1155Module  `  | Ladle Module with ERC1155 transferring capabilities.                                      |
-| `  posted  `   | Amount of collateral being deposited.      |
-| `  ilkJoin  `  | Contract holding ilk for Yield v2.                                      |
-| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
-| `  ignored  `   | Receiver of any tokens produced by pour, which is not producing any in this batch.      |
-| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
-
-
-**Note:** Approval for an ERC1155 is executed as `erc1155.setApprovalForAll(spender, true)` and gives permission to spender to take any amount of any token inside `erc1155` from the caller.
-
 ### Withdraw ERC20 collateral
 
 This batch removes an amount of an ERC20 collateral from a vault. Destroying the vault at the end is optional and possible only if the vault holds no collateral and no debt.
@@ -219,51 +245,6 @@ This batch removes an amount of an ERC20 collateral from a vault. Destroying the
 
 
 **Limits:** The collateral token balance of the related Join.
-
-### Post Ether as collateral
-
-This batch adds Ether as collateral to a vault. It can be combined with previous actions that create vaults.
-
-```
-  await ladle.batch([
-    ladle.joinEtherAction(ethId),
-    ladle.pourAction(vaultId, ignored, posted, 0),
-  ])
-```
-
-|Param  | Description|
-|--------------|------------------------------------------------------------------------------------|
-| `  ethId  `   | Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.  |
-| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.  |
-| `  posted  `   | Amount of collateral being deposited.  |
-| `  ignored  `   | Receiver of any tokens produced by pour, which is not producing any in this batch.  |
-| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.  |
-
-
-### Withdraw Ether collateral
-
-This batch removes an amount of Ether collateral from a vault. Destroying the vault at the end is optional and possible only if the vault holds no collateral and no debt.
-
-The Ether withdrawn will be temporarily held by the Ladle until the end of the transaction.
-
-```
-  await ladle.batch([
-    ladle.pourAction(vaultId, ladle, withdrawn.mul(-1), 0),
-    ladle.exitEtherAction(ethId, receiver),
-    ladle.destroy(vaultId),
-  ])
-```
-
-|Param  | Description|
-|--------------|------------------------------------------------------------------------------------|
-| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
-| `  ladle  `   | Ladle for Yield v2.      |
-| `  withdrawn  `   | Collateral withdrawn. Note it is a negative.      |
-| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
-| `  ethId  `   | Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.      |
-| `  receiver  `   | Receiver of the collateral.      |
-
-**Limits:** The WETH balance of the related Join.
 
 ### Borrow fyToken
 
@@ -408,57 +389,6 @@ Combine with a base permit for the base join if not present.
 
 - No approval is necessary
 
-## Vault Management
-
-### Destroy a vault
-
-This action will destroy a vault, provided it has no debt or collateral. Combine with any batch that repays debt and withdraws collateral.
-
-```
-  await ladle.batch([
-      ladle.destroyAction(vaultId),
-  ])
-```
-
-`vaultId`: Vault to destroy.
-
-### Merge two vaults into one
-
-This batch will combine two vaults of the same series and ilk into one, adding their debt and collateral.
-
-```
-  await ladle.batch([
-      ladle.stirAction(vaultId1, vaultId2, collateral, debt),
-      ladle.destroyAction(vaultId1),
-  ])
-```
-|Param  | Description|
-|--------------|------------------------------------------------------------------------------------|
-| `  vaultId1  `   | First vault to merge. This vault will be destroyed.      |
-| `  vaultId2  `   | Second vault to merge.       |
-| ` collateral  `   | Collateral amount in the first vault      |
-| `  debt  `   | Debt amount in the first vault in fyToken terms.      |
-
-
-### Split a vault into two
-
-This batch will split part of the debt and collateral of one vault into a new vault.
-
-```
-  await ladle.batch([
-      ladle.buildAction(seriesId, ilkId, 0),
-      ladle.stirAction(vaultId, 0, collateral, debt),
-  ])
-```
-
-|Param  | Description|
-|--------------|------------------------------------------------------------------------------------|
-| `  seriesId  `   | Series for the vault we are splitting debt from.      |
-| `  ilkId  `   | Collateral for the vault that we are splitting collateral from.      |
-| `  vaultId  `   | Vault to split debt and collateral from.      |
-| `  0  `   | Indicates the second vault will be built as a result of this batch.       |
-| ` collateral  `   | Collateral amount in the first vault      |
-| `  debt  `   | Debt amount in the first vault in fyToken terms.      |
 
 ### Roll debt before maturity
 
@@ -964,77 +894,180 @@ Removing liquidity from a strategy has an initial two steps in which the strateg
 
 **Note:** Unlikely to remove liquidity before maturity with strategies. Unless sunsetting strategy.
 
-## V1 Liquidity Migration
+## Ether
 
-### Use V1 Liquidity Tokens to provide liquidity to V2
+### Post Ether as collateral
 
-To migrate v1 liquidity to v2, we start by converting the v1 Liquidity Tokens into Dai, which then can be used later in the same batch to become v2 liquidity, either by borrowing or by buying.
+This batch adds Ether as collateral to a vault. It can be combined with previous actions that create vaults.
 
-For an easier split, the user wallet is used as a holding place for the Dai.
+```
+  await ladle.batch([
+    ladle.joinEtherAction(ethId),
+    ladle.pourAction(vaultId, ignored, posted, 0),
+  ])
+```
 
-Once the Dai is in the user’s wallet, proceed by appending any of the other liquidity providing batches.
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  ethId  `   | Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.  |
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.  |
+| `  posted  `   | Amount of collateral being deposited.  |
+| `  ignored  `   | Receiver of any tokens produced by pour, which is not producing any in this batch.  |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.  |
 
+
+### Withdraw Ether collateral
+
+This batch removes an amount of Ether collateral from a vault. Destroying the vault at the end is optional and possible only if the vault holds no collateral and no debt.
+
+The Ether withdrawn will be temporarily held by the Ladle until the end of the transaction.
+
+```
+  await ladle.batch([
+    ladle.pourAction(vaultId, ladle, withdrawn.mul(-1), 0),
+    ladle.exitEtherAction(ethId, receiver),
+    ladle.destroy(vaultId),
+  ])
+```
+
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  withdrawn  `   | Collateral withdrawn. Note it is a negative.      |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
+| `  ethId  `   | Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.      |
+| `  receiver  `   | Receiver of the collateral.      |
+
+**Limits:** The WETH balance of the related Join.
+
+### Redeem fyETH
+When redeeming fyETH the output will be in Wrapped Ether, to unwrap it a Ladle batch must be used. That also means that the Ladle must receive a permit to move fyETH to the fyETH contract.
 ```
   await ladle.batch([
     ladle.forwardPermitAction(
-      v1Pool, ladle, poolTokens, deadline, v, r, s
+      fyETH, ladle, redeemed, deadline, v, r, s
     ),
-    ladle.transferAction(v1Pool, ladle, poolTokens),
-    ladle.moduleCallAction(v1Module, [
-      'migrateLiquidity',
-      [v1Pool, receiver, poolTokens, minimumFYDaiPrice]),
-    ...
+    ladle.transferAction(fyETH, fyETH, redeemed),
+    ladle.routeCall(fyETH, redeem(ladle, redeemed)),
+    ladle.exitEther(receiver),
   ])
 ```
 |Param  | Description|
 |--------------|------------------------------------------------------------------------------------|
-| `  v1Pool  `   | V1 YieldSpace Pool matching the tokens to be used.    |
-| `  ladle  `   | Ladle for Yield v2.    |
-| ` poolTokens  `   | Amount of v1 liquidity tokens that the user will provide liquidity with.    |
-| `  receiver  `   | Receiver for the LP tokens. If using buy and pool, it would be the v2 pool.    |
-| `  minimumFYDaiPrice  `   | Minimum FYDai price to be accepted.    |
+| `  fyETH  `   | Address for the fyETH contract.      |
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  redeemed  `   | Amount of fyETH to redeem for ETH.      |
+| `  receiver  `   | Receiver of the ETH.      |
 
-## stETH Wrapping/Unwrapping
+**Note** If the user is happy with WETH, he can just call `fyETH.redeem(...)` and skip the batch and permit.
 
-### Wrap stEth into wstETH
+### Provide Ether as liquidity (borrowing)
 
-Users can provide stEth as collateral, which we wrap into WstEth when sending it to the Join.
+The `joinEther` function in the original Ladle implementation doesn't allow for wrapping Ether into Wrapped Ether
+and transfer it to an arbitrary destination, for that we need to use the WrapEtherModule. For providing liquidity,
+we receive the Ether in the batch, and wrap it into Wrapped Ether into the Ladle. From there we split the Wrapped
+Ether into the Join and Pool as necessary.
 
 ```
   await ladle.batch([
-    ladle.forwardPermitAction(
-      lidoWrapper, ladle, stEthTokens, deadline, v, r, s
-    ),
-    ladle.transferAction(stEth, lidoWrapper, stEthTokens),
-    ladle.routeAction(lidoWrapper, [
-      'wrap',
-      [wstEthJoin]),
-    ...
-  ])
+    ladle.moduleCall(wrapEtherModule, wrap(ladle, etherUsed)),
+    ladle.transferAction(weth, wethJoin, wethToFYToken),
+    ladle.transferAction(weth, pool, wethToPool),
+    ladle.pourAction(0, pool, wethToFYToken, wethToFYToken),
+    ladle.routeAction(pool, ['mint', [receiver, receiver, minRatio, maxRatio]),
+  ],
+  { value: etherUsed }
+  )
 ```
-
 |Param  | Description|
 |--------------|------------------------------------------------------------------------------------|
-| `  lidoWrapper  `   |  LidoWrapperHandler that wraps/unwraps stEth in a batch.  |
-| `  stEthTokens  `   |  Amount of v1 liquidity tokens that the user will provide liquidity with.  |
-| ` wstEthJoin  `   |  Join for wstEther.  |
+| `  wrapEtherModule  `   | Module to Wrap Ether into arbitrary addresses.    |
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  weth  `   | Contract for Wrapped Ether.    |
+| `  wethJoin  `   | Contract holding WETH for Yield v2.    |
+| `  wethToPool  `   | Portion of the underlying supplied that will be directly sent to the pool.    |
+| `  wethToFYtoken  `   | Portion of the underlying supplied that will be used to borrow fyToken, sent to the pool.    |
+| `  0  `   | Vault to add the debt to, set to 0 as the vault was created as part of this same batch.    |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.    |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.    |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.    |
+| `  receiver  `   | Receiver for the LP tokens.    |
+| `  etherUsed  `   | Total amount of Ether provided.    |
 
-**Note:** Calculate the amount of wstEth obtained from the wstEth contract by calling wstEth.getWstEthByStEth.
 
-### Unwrap wstEth into stETH
+### Provide Ether as liquidity (buying)
 
-When users remove wstEth from the platform, we unwrap it to stETH before giving it to them. Drop the wstETH in the lidoWrapper and append this to an appropriate batch.
+The `joinEther` function in the original Ladle implementation doesn't allow for wrapping Ether into Wrapped Ether
+and transfer it to an arbitrary destination, for that we need to use the WrapEtherModule. For providing liquidity,
+we receive the Ether in the batch, and wrap it into Wrapped Ether into the Pool. Any Wrapped Ether that is not used
+is unwrapped and sent back to the receiver.
 
 ```
   await ladle.batch([
-    ...
-    ladle.routeAction(lidoWrapper, [
-      'unwrap',
-      [receiver]),
+    ladle.moduleCall(wrapEtherModule, wrap(ladle, etherWithSlippage)),
+    ladle.transferAction(weth, pool, wethWithSlippage),
+    ladle.routeAction(pool, ['mintWithBase', [receiver, ladle, fyTokenToBuy, minRatio, maxRatio]),
+    ladle.exitEther(receiver),
+  ],
+  { value: etherWithSlippage }
+  )
+```
+
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  wrapEtherModule  `   | Module to Wrap Ether into arbitrary addresses.    |
+| `  weth  `   | Contract for Wrapped Ether.    |
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.      |
+| `  wethWithSlippage  `   | Maximum amount of underlying that the user will provide liquidity with.      |
+| `  fyTokenToBuy  `   | FYToken that the user will buy using part of the underlying, to provide liquidity with.      |
+| `  receiver  `   | Receiver for the LP tokens.      |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.      |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.      |
+| `  etherUsed  `   | Total amount of Ether provided.    |
+
+
+**Limits:** The real fyToken reserves of the pool, minus the base reserves, divided by two, must be below `fyTokenToBuy`.
+
+### Remove liquidity from Ether pools
+When removing liquidity the output will include Wrapped Ether, to unwrap it you just need to send it to the Ladle and call `exitEther(receiver)`
+
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  ladle  `   | Ladle for Yield v2.      |
+| `  receiver  `   | Receiver for the LP tokens.      |
+
+
+## ERC1155
+
+### Post ERC1155 collateral (Ladle Approval)
+
+This batch adds a token within an ERC1155 contract as collateral to a vault, using a Ladle module. Off-chain signatures are not available for ERC1155 and a previous transaction is required to approve the Ladle. It can be combined with previous actions that create vaults.
+
+```
+  await ladle.batch([
+    ladle.moduleCall(transfer1155Module, transfer(ilk, id, ilkJoin, posted)),
+    ladle.pourAction(vaultId, ignored, posted, 0),
   ])
 ```
 |Param  | Description|
 |--------------|------------------------------------------------------------------------------------|
-| `  receiver  `   |  Receiver for the stEth.  |
+| ` ilk ` | Contract for the collateral being added to the vault. |
+| ` id ` | ERC1155 id for the collateral being added to the vault. |
+| `  ladle  `  | Ladle for Yield v2.                                      |
+| `  transfer1155Module  `  | Ladle Module with ERC1155 transferring capabilities.                                      |
+| `  posted  `   | Amount of collateral being deposited.      |
+| `  ilkJoin  `  | Contract holding ilk for Yield v2.                                      |
+| `  vaultId  `   | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.      |
+| `  ignored  `   | Receiver of any tokens produced by pour, which is not producing any in this batch.      |
+| `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
 
-**Note:** If necessary, calculate the amount of stEth obtained from the wstEth contract by calling wstEth.getStEthBywstEth.
+
+**Note:** Approval for an ERC1155 is executed as `erc1155.setApprovalForAll(spender, true)` and gives permission to spender to take any amount of any token inside `erc1155` from the caller.
+
+### Withdraw ERC1155 collateral
+
+The withdrawal of ERC1155 collateral is executed the same as the withdrawal of ERC20 collateral.
+
+**Note:** When withdrawing Notional's fCash after maturity as set in Notional, the asset received will be in the fCash underlying.
