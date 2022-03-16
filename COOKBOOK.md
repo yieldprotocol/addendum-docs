@@ -949,13 +949,14 @@ When redeeming fyETH the output will be in Wrapped Ether, to unwrap it a Ladle b
       fyETH, ladle, redeemed, deadline, v, r, s
     ),
     ladle.transferAction(fyETH, fyETH, redeemed),
-    ladle.routeCall(fyETH, redeem(ladle, redeemed)),
+    ladle.redeem(fyETHId, ladle, redeemed),
     ladle.exitEther(receiver),
   ])
 ```
 |Param  | Description|
 |--------------|------------------------------------------------------------------------------------|
 | `  fyETH  `   | Address for the fyETH contract.      |
+| `  fyETHId  `   | SeriesId for the fyETH contract.      |
 | `  ladle  `   | Ladle for Yield v2.      |
 | `  redeemed  `   | Amount of fyETH to redeem for ETH.      |
 | `  receiver  `   | Receiver of the ETH.      |
