@@ -1004,8 +1004,7 @@ is unwrapped and sent back to the receiver.
 
 ```
   await ladle.batch([
-    ladle.moduleCall(wrapEtherModule, wrap(ladle, etherWithSlippage)),
-    ladle.transferAction(weth, pool, wethWithSlippage),
+    ladle.moduleCall(wrapEtherModule, wrap(pool, etherWithSlippage)),
     ladle.routeAction(pool, ['mintWithBase', [receiver, ladle, fyTokenToBuy, minRatio, maxRatio]),
     ladle.exitEther(receiver),
   ],
@@ -1016,7 +1015,6 @@ is unwrapped and sent back to the receiver.
 |Param  | Description|
 |--------------|------------------------------------------------------------------------------------|
 | `  wrapEtherModule  `   | Module to Wrap Ether into arbitrary addresses.    |
-| `  weth  `   | Contract for Wrapped Ether.    |
 | `  ladle  `   | Ladle for Yield v2.      |
 | `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.      |
 | `  wethWithSlippage  `   | Maximum amount of underlying that the user will provide liquidity with.      |
