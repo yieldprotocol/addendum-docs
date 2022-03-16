@@ -971,9 +971,8 @@ Ether into the Join and Pool as necessary.
 
 ```
   await ladle.batch([
-    ladle.moduleCall(wrapEtherModule, wrap(ladle, etherUsed)),
-    ladle.transferAction(weth, wethJoin, wethToFYToken),
-    ladle.transferAction(weth, pool, wethToPool),
+    ladle.moduleCall(wrapEtherModule, wrap(wethJoin, wethToFYToken)),
+    ladle.moduleCall(wrapEtherModule, wrap(pool, wethToPool)),
     ladle.pourAction(0, pool, wethToFYToken, wethToFYToken),
     ladle.routeAction(pool, ['mint', [receiver, receiver, minRatio, maxRatio]),
   ],
@@ -993,7 +992,7 @@ Ether into the Join and Pool as necessary.
 | `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.    |
 | `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.    |
 | `  receiver  `   | Receiver for the LP tokens.    |
-| `  etherUsed  `   | Total amount of Ether provided.    |
+| `  etherUsed  `   | Total amount of Ether provided, equal to wethToPool + wethToFYtoken.    |
 
 
 ### Provide Ether as liquidity (buying)
