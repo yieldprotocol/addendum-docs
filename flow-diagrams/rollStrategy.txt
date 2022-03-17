@@ -9,20 +9,33 @@ participant token/base
 group endPool
 timelock->strategy: endPool
 strategy->pool: transfer(pool, balanceOf(strategy))
+activate strategy
+strategy-->pool: balanceOf(strategy) to pool
+deactivate strategy
 strategy->pool: burn(strategy, strategy, 0, max)
 note over pool: tokenOut = (tokensBurned * _baseCached) / supply\nfyTokenOut = (tokensBurned * _realFYTokenCached) / supply
 pool->token/base: transfer(strategy,tokenOut)
-group [if fyTokenOut > 0]
-pool->fyToken: transfer(strategy,fyTokenOut)
+activate pool
+pool<--token/base: tokenOut of base
+deactivate pool
+group condition [if fyTokenOut > 0]
+pool->fyToken: transfer(strategy,fyTokenOut
+strategy<--fyToken: fyTokenOut of fyToken
 end
-pool->strategy: fyTokenDivested
+pool-->strategy: fyTokenDivested
+
 strategy->fyToken: transfer(fyToken,fyTokenDivested)
+activate strategy
+strategy-->fyToken: fyTokenDivested of fyToken
+deactivate strategy
 strategy->fyToken: redeem(strategy,fyTokenDivested)
+activate strategy
 fyToken->fyToken: burn(strategy,fyTokenDivested)
 fyToken->join: exit(strategy,redeemed)
 join->token/base: transfer(strategy,redeemed)
+token/base-->strategy: redeemed of token/base
+deactivate strategy
 end
- 
 group setNextPool
 timelock->strategy:setNextPool(pool,seriesId)
 note over strategy: nextPool=pool\nnextSeriesId=seriesId
@@ -31,15 +44,20 @@ end
 group startPool
 timelock->strategy: startPool(minRatio,maxRatio)
 note over strategy: baseBalance = base.balanceOf(address(this))\nbaseInPool = base.balanceOf(address(pool_))\nfyTokenInPool = fyToken_.balanceOf(address(pool_))\nbaseToPool = (baseBalance * baseInPool).divUp(baseInPool + fyTokenInPool)\nfyTokenToPool = baseBalance - baseToPool
-strategy->fyToken: transfer(join,fyTokenToPool)
+strategy->token/base: transfer(join,fyTokenToPool)
+token/base-->join: fyTokenToPool of token/base
 strategy->fyToken: mintWithUnderlying(pool,fyTokenToPool)
+
 fyToken->fyToken: mint(pool, fyTokenToPool)
+fyToken-->pool: fyTokenToPool of fyToken
 fyToken->join: join(strategy, fyTokenToPool)
 strategy->token/base: transfer(pool,baseToPool)
+token/base-->pool: baseToPool of token/base
 strategy->pool: mint(strategy,strategy,minRatio,maxRatio)
 pool->pool: mint(strategy,tokensMinted)
+pool-->strategy: tokensMinted of pool token
 pool->strategy: <<cached>>
-group [if totalSupply==0]
+group condition [if totalSupply==0]
 strategy->strategy: mint(timelock,cached)
 end
 end
