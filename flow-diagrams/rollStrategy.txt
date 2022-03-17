@@ -1,0 +1,39 @@
+title This is how we roll! (Rolling a strategy)
+participant timelock
+participant strategy
+participant pool
+participant fyToken
+participant join
+participant token
+
+group endPool
+timelock->strategy: endPool
+strategy->pool: transfer(pool, balanceOf(strategy))
+strategy->pool: burn(strategy, strategy, 0, max)
+pool->strategy: fyTokenDivested
+strategy->fyToken: transfer(fyToken,fyTokenDivested)
+strategy->fyToken: redeem(strategy,fyTokenDivested)
+fyToken->fyToken: burn(strategy,fyTokenDivested)
+fyToken->join: exit(strategy,redeemed)
+join->token: transfer(strategy,redeemed)
+end
+ 
+group setNextPool
+timelock->strategy:setNextPool(pool,seriesId)
+note over strategy: nextPool=pool\nnextSeriesId=seriesId
+end
+
+group startPool
+timelock->strategy: startPool(minRatio,maxRatio)
+note over strategy: baseBalance = base.balanceOf(address(this))\nbaseInPool = base.balanceOf(address(pool_))\nfyTokenInPool = fyToken_.balanceOf(address(pool_))\nbaseToPool = (baseBalance * baseInPool).divUp(baseInPool + fyTokenInPool)\nfyTokenToPool = baseBalance - baseToPool
+strategy->token: transfer(join,fyTokenToPool)
+strategy->fyToken: mintWithUnderlying(pool,fyTokenToPool)
+fyToken->fyToken: mint(pool, fyTokenToPool)
+fyToken->join: join(strategy, fyTokenToPool)
+strategy->token: transfer(pool,baseToPool)
+strategy->pool: mint(strategy,strategy,minRatio,maxRatio)
+pool->strategy: <<cached>>
+group [if totalSupply==0]
+strategy->strategy: mint(timelock,cached)
+end
+end
