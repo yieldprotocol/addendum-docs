@@ -31,7 +31,7 @@ end
 group startPool
 timelock->strategy: startPool(minRatio,maxRatio)
 note over strategy: baseBalance = base.balanceOf(address(this))\nbaseInPool = base.balanceOf(address(pool_))\nfyTokenInPool = fyToken_.balanceOf(address(pool_))\nbaseToPool = (baseBalance * baseInPool).divUp(baseInPool + fyTokenInPool)\nfyTokenToPool = baseBalance - baseToPool
-strategy->token/base: transfer(join,fyTokenToPool)
+strategy->fyToken: transfer(join,fyTokenToPool)
 strategy->fyToken: mintWithUnderlying(pool,fyTokenToPool)
 fyToken->fyToken: mint(pool, fyTokenToPool)
 fyToken->join: join(strategy, fyTokenToPool)
