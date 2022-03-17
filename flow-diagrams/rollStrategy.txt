@@ -4,18 +4,23 @@ participant strategy
 participant pool
 participant fyToken
 participant join
-participant token
+participant token/base
 
 group endPool
 timelock->strategy: endPool
 strategy->pool: transfer(pool, balanceOf(strategy))
 strategy->pool: burn(strategy, strategy, 0, max)
+note over pool: tokenOut = (tokensBurned * _baseCached) / supply\nfyTokenOut = (tokensBurned * _realFYTokenCached) / supply
+pool->token/base: transfer(strategy,tokenOut)
+group [if fyTokenOut > 0]
+pool->fyToken: transfer(strategy,fyTokenOut)
+end
 pool->strategy: fyTokenDivested
 strategy->fyToken: transfer(fyToken,fyTokenDivested)
 strategy->fyToken: redeem(strategy,fyTokenDivested)
 fyToken->fyToken: burn(strategy,fyTokenDivested)
 fyToken->join: exit(strategy,redeemed)
-join->token: transfer(strategy,redeemed)
+join->token/base: transfer(strategy,redeemed)
 end
  
 group setNextPool
@@ -26,12 +31,13 @@ end
 group startPool
 timelock->strategy: startPool(minRatio,maxRatio)
 note over strategy: baseBalance = base.balanceOf(address(this))\nbaseInPool = base.balanceOf(address(pool_))\nfyTokenInPool = fyToken_.balanceOf(address(pool_))\nbaseToPool = (baseBalance * baseInPool).divUp(baseInPool + fyTokenInPool)\nfyTokenToPool = baseBalance - baseToPool
-strategy->token: transfer(join,fyTokenToPool)
+strategy->token/base: transfer(join,fyTokenToPool)
 strategy->fyToken: mintWithUnderlying(pool,fyTokenToPool)
 fyToken->fyToken: mint(pool, fyTokenToPool)
 fyToken->join: join(strategy, fyTokenToPool)
-strategy->token: transfer(pool,baseToPool)
+strategy->token/base: transfer(pool,baseToPool)
 strategy->pool: mint(strategy,strategy,minRatio,maxRatio)
+pool->pool: mint(strategy,tokensMinted)
 pool->strategy: <<cached>>
 group [if totalSupply==0]
 strategy->strategy: mint(timelock,cached)
