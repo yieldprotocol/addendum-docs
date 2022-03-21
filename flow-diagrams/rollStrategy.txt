@@ -10,13 +10,13 @@ group endPool
 timelock->strategy: endPool
 strategy->pool: transfer(pool, balanceOf(strategy))
 activate strategy
-strategy-->pool: balanceOf(strategy) to pool
+strategy-->pool: balanceOf(strategy) of pool
 deactivate strategy
 strategy->pool: burn(strategy, strategy, 0, max)
 note over pool: tokenOut = (tokensBurned * _baseCached) / supply\nfyTokenOut = (tokensBurned * _realFYTokenCached) / supply
 pool->token/base: transfer(strategy,tokenOut)
 activate pool
-pool<--token/base: tokenOut of base
+strategy<--token/base: tokenOut of base
 deactivate pool
 group condition [if fyTokenOut > 0]
 pool->fyToken: transfer(strategy,fyTokenOut
