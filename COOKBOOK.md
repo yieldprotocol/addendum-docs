@@ -1029,11 +1029,14 @@ is unwrapped and sent back to the receiver.
 **Limits:** The real fyToken reserves of the pool, minus the base reserves, divided by two, must be below `fyTokenToBuy`.
 
 ### Remove liquidity from Ether pools
-When removing liquidity the output will include Wrapped Ether, to unwrap it you just need to send it to the Ladle and call `exitEther(receiver)`
+When removing liquidity the output will include Wrapped Ether, to unwrap it you need to send it to the Ladle and call `exitEther(receiver)`
+
+Note that if you include a call to `repayFromLadle`, any unused fyETH will remain the the Ladle. To get it to the user append a `retrieve(fyToken, receiver)` call at the end of the batch. This might be corrected in future Ladle versions.
 
 |Param  | Description|
 |--------------|------------------------------------------------------------------------------------|
 | `  ladle  `   | Ladle for Yield v2.      |
+| `  fyToken  `   | FYToken contract.      |
 | `  receiver  `   | Receiver for the LP tokens.      |
 
 
