@@ -633,7 +633,7 @@ The maximum amount of base to use will be transferred to the pool, and any surpl
 
 ### Remove liquidity and repay
 
-The reverse of borrowing to provide liquidity. It is possible to estimate in the frontend whether using underlying to repay debt will be necessary, and if not the base can be sent to `receiver` in `burn`, and the last action omitted. Any surplus is sent to the `receiver`.
+The reverse of borrowing to provide liquidity, only before maturity and only if the user has any debt. The base is sent to `receiver`, and the fyToken is used to repay debt. Any remaining fyToken is sent to the user.
 
 ```
   await ladle.batch([
@@ -641,9 +641,8 @@ The reverse of borrowing to provide liquidity. It is possible to estimate in the
       pool, ladle, lpTokensBurnt, deadline, v, r, s
     ),
     ladle.transferAction(pool, pool, lpTokensBurnt),
-    ladle.routeAction(pool, ['burn', [ladle, ladle, minRatio, minRatio]),
-    ladle.repayFromLadleAction(vaultId, receiver),
-    ladle.closeFromLadleAction(vaultId, receiver),
+    ladle.routeAction(pool, ['burn', [ladle, receiver, minRatio, maxRatio]]),
+    ladle.repayFromLadleAction(vaultId, receiver, receiver),
   ])
 ```
 |Param  | Description|
@@ -656,41 +655,13 @@ The reverse of borrowing to provide liquidity. It is possible to estimate in the
 | `  vaultId  `   | Vault to repay debt from.   |
 | `  receiver  `   | Receiver for the LP tokens.   |
 
-**Usage:** Use before maturity if borrow and pool was used, and if debt is above `minFYTokenReceived`.
-
-### Remove liquidity, repay and sell
-
-If there is a small amount of debt to repay, it might be best for the user to repay it with fyToken from the burn, and then receive the fyToken surplus.
-
-```
-  await router.batch([
-    ladle.forwardPermitAction(
-      pool, ladle, LPTokensBurnt, deadline, v, r, s
-    ),
-    ladle.transferAction(pool, pool, LPTokensBurnt),
-    ladle.routeAction(pool, ['burn', [receiver, ladle, 0, 0]),
-    ladle.repayFromLadleAction(vaultId, receiver),
-  ])
-```
-|Param  | Description|
-|--------------|------------------------------------------------------------------------------------|
-| `  ladle  `   | Ladle for Yield v2. |
-| `  LPTokensBurnt  `   | Amount of LP tokens burnt. |
-| ` pool  `   | Contract YieldSpace pool trading base and the fyToken for the series. |
-| `  receiver  `   | Receiver for the resulting tokens. |
-| `  vaultId  `   | Vault to repay debt from. |
-
-**Usage:** Use before maturity if borrow and pool was used, and if debt is below fyToken received.
+**Usage:** Use before maturity if borrow and pool was used, and there is any debt.
 
 **Limits:** The debt of the user plus the base reserves of the pool must be lower than the fyToken received.
 
-**Note**: If repayFromLadle is refactored to send collateral and remainder to separate addresses, the surplus fyToken could be sold.
+### Remove liquidity, repay and sell
 
-**Note**: Cheaper than “Remove liquidity and repay”. Sometimes might make sense to leave vaults with debt instead of spending the gas to repay them.
-
-### Remove liquidity and redeem
-
-After maturity, fyToken can be redeemed by sending it to the fyToken contract.
+As before, but the edge case in which the remainder after repaying debt is small enough to be sold in the pool, yet big enough to be worth the gas.
 
 ```
   await ladle.batch([
@@ -698,26 +669,26 @@ After maturity, fyToken can be redeemed by sending it to the fyToken contract.
       pool, ladle, lpTokensBurnt, deadline, v, r, s
     ),
     ladle.transferAction(pool, pool, lpTokensBurnt),
-    ladle.routeAction(pool, ['burn', [receiver, fyToken, minRatio, maxRatio]),
-    ladle.redeemAction(seriesId, receiver, 0),
+    ladle.routeAction(pool, ['burn', [ladle, receiver, minRatio, maxRatio]]),
+    ladle.repayFromLadleAction(vaultId, receiver, pool),
+    ladle.routeAction(pool, ['sellFYToken', [receiver, 0]]),
   ])
 ```
-
 |Param  | Description|
 |--------------|------------------------------------------------------------------------------------|
-| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.  |
-| `  ladle  `   | Ladle for Yield v2.  |
-| ` lpTokensBurn  `   | `Amount of LP tokens that the user will burn.  |
-| `  fyToken  `   | FYToken contract for the pool.  |
-| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.  |
-| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.  |
-| `  seriesId  `   | SeriesId for the fyToken contract.  |
-| ` receiver  `   | Receiver for the LP tokens.  |
-| `  0  `   | The amount of fyToken to redeem is whatever was sent to the fyToken contract.  |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.`   |
+| `  ladle  `   | Ladle for Yield v2.   |
+| ` lpTokensBurn  `   | `Amount of LP tokens that the user will burn.   |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.   |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.   |
+| `  vaultId  `   | Vault to repay debt from.   |
+| `  receiver  `   | Receiver for the LP tokens.   |
 
+**Usage:** Use before maturity if borrow and pool was used, and there is any debt.
 
+**Limits:** The debt of the user plus the base reserves of the pool must be lower than the fyToken received.
 
-**Usage:** Use always after maturity, if allowed by accounting. The vault can be forgotten.
+**Note:** Slippage is controlled by minRatio and maxRatio, so sellFYToken doesn't need to check again.
 
 ### Remove liquidity and sell
 
@@ -747,35 +718,36 @@ Before maturity, the fyToken resulting from removing liquidity can be sold withi
 
 **Note:** Can also be used close to maturity in “borrow and pool” to save gas .
 
-### Remove liquidity, redeem and close
 
-When removing liquidity after maturity, all the proceeds can be converted into base to repay without rolling the debt in the vault.
+### Remove liquidity and redeem
+
+After maturity, fyToken can be redeemed by sending it to the fyToken contract.
 
 ```
   await ladle.batch([
     ladle.forwardPermitAction(
-      pool, ladle, LPTokensBurnt, deadline, v, r, s
+      pool, ladle, lpTokensBurnt, deadline, v, r, s
     ),
-    ladle.transferAction(pool, pool, LPTokensBurnt),
-    ladle.routeAction(pool, ['burn', [ladle, fyToken, minRatio, maxRatio]),
-    ladle.redeemAction(seriesId, ladle, 0),
-    ladle.closeFromLadleAction(vaultId, receiver),
+    ladle.transferAction(pool, pool, lpTokensBurnt),
+    ladle.routeAction(pool, ['burn', [receiver, fyToken, minRatio, maxRatio]),
+    ladle.redeemAction(seriesId, receiver, 0),
   ])
 ```
 
 |Param  | Description|
 |--------------|------------------------------------------------------------------------------------|
-| `  ladle  `   |  Ladle for Yield v2.      |
-| `  LPTokensBurnt  `   |  Amount of LP tokens burnt.      |
-| ` pool  `   |  Contract YieldSpace pool trading base and the fyToken for the series.      |
-| `  fyToken  `   |  FYToken contract for the pool.      |
-| `  minRatio  `   |  Minimum base/fyToken ratio accepted in the pool reserves.      |
-| `  maxRatio  `   |  Maximum base/fyToken ratio accepted in the pool reserves.      |
-| `  seriesId  `   |  Series for the fyToken.      |
-| ` vaultId  `   |  Vault to repay debt from.      |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.  |
+| `  ladle  `   | Ladle for Yield v2.  |
+| ` lpTokensBurn  `   | `Amount of LP tokens that the user will burn.  |
+| `  fyToken  `   | FYToken contract for the pool.  |
+| `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.  |
+| `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.  |
+| `  seriesId  `   | SeriesId for the fyToken contract.  |
+| ` receiver  `   | Receiver for the LP tokens.  |
+| `  0  `   | The amount of fyToken to redeem is whatever was sent to the fyToken contract.  |
 
 
-**Usage:** Don’t use, unless forced to repay vaults.
+**Usage:** Use always after maturity, if allowed by accounting. The vault can be forgotten.
 
 ### Roll liquidity before maturity
 
