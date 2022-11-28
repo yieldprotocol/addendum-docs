@@ -789,7 +789,7 @@ As with “Provide liquidity by buying”, the frontend needs to calculate the a
       pool1, ladle, poolTokens, deadline, v, r, s
     ),
     ladle.transferAction(pool1, pool1, poolTokens),
-    ladle.routeAction(pool1, ['burnForBase', [pool2, 0]),
+    ladle.routeAction(pool1, ['burnForBase', [pool2]),
     ladle.routeAction(pool2, ['mintWithBase', [receiver, receiver, fyTokenToBuy, minRatio, maxRatio]),
   ])
 ```
@@ -838,6 +838,8 @@ Providing liquidity to a strategy is identical to providing liquidity to a pool,
 | `  receiver  `   | Receiver for the LP tokens.    |
 
 
+## Strategies
+
 ### Provide liquidity to strategy by buying
 
 Providing liquidity to a strategy is identical to providing liquidity to a pool, with an added action at the end to convert from LP tokens to strategy tokens. Prepend this batch with actions to provide permits as necessary. The amount of fyToken to buy would be calculated iteratively on the frontend, since there isn’t a closed form formula to find it.
@@ -872,7 +874,7 @@ Removing liquidity from a strategy has an initial two steps in which the strateg
       strategy, ladle, strategyTokensBurnt, deadline, v, r, s
     ),
     ladle.transferAction(strategy, strategy, strategyTokensBurnt),
-    ladle.routeAction(strategy, ['burn', [pool, 0]),
+    ladle.routeAction(strategy, ['burn', [pool]),
     … (follow with any of the 5 remove liquidity batches for removing liquidity)
     … (without the permit or the transfer, the pool tokens are in the pool already)
   ])
@@ -892,7 +894,41 @@ Removing liquidity from a strategy has an initial two steps in which the strateg
 
 **Limits:** If there is too much fyToken received to be sold in the pool, the fyToken received will need to be held until it can be sold or redeemed.
 
-**Note:** Unlikely to remove liquidity before maturity with strategies. Unless sunsetting strategy.
+**Note:** Unlikely to remove liquidity before maturity with strategies.
+
+### Remove liquidity from deprecated strategy
+
+When migrating strategies, the deprecated strategies become proportional holding vaults for the new strategies. Holders still have v1 strategy tokens, and by burning them they obtain v2 strategy tokens. This process is appended at the beginning of a liquidity removal batch if users hold deprecated strategy tokens.
+
+```
+  await router.batch([
+    ladle.forwardPermitAction(
+      strategyV1, ladle, strategyTokensBurnt, deadline, v, r, s
+    ),
+    ladle.transferAction(strategyV1, strategyV1, strategyTokensBurnt),
+    ladle.routeAction(strategyV1, ['burn', [strategyV2]),
+    ladle.routeAction(strategyV2, ['burn', [pool]),
+    … (follow with any of the 5 remove liquidity batches for removing liquidity)
+    … (without the permit or the transfer, the pool tokens are in the pool already)
+  ])
+```
+
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  strategyV1  `   | Deprecated contract for investing in Yield v2 tokens.   |
+| `  strategyV2  `   | New contract for investing in Yield v2 tokens.   |
+| `  ladle  `   | Ladle for Yield v2.   |
+| ` strategyTokensBurnt  `   | Amount of strategy tokens burnt.   |
+| `  pool  `   | Contract YieldSpace pool trading base and the fyToken for the series.   |
+| `  minBaseReceive  `   | Minimum amount of base that will be accepted.   |
+| `  minFYTokenReceive  `   | `Minimum amount of fyToken that will be accepted.   |
+
+
+**Usage:** Use burn and sell for both ‘borrow and pool’ and ‘buy and pool’ if possible. Defined as the user not having a vault of the matching series with the underlying as collateral.
+
+**Limits:** If there is too much fyToken received to be sold in the pool, the fyToken received will need to be held until it can be sold or redeemed.
+
+**Note:** Unlikely to remove liquidity before maturity with strategies.
 
 ## Ether
 
