@@ -55,9 +55,12 @@
   - [Remove liquidity and sell](#remove-liquidity-and-sell)
   - [Remove liquidity, redeem and close](#remove-liquidity-redeem-and-close)
   - [Roll liquidity before maturity](#roll-liquidity-before-maturity)
+
+ [Strategies](#strategies)
   - [Provide liquidity to strategy by borrowing](#provide-liquidity-to-strategy-by-borrowing)
   - [Provide liquidity to strategy by buying](#provide-liquidity-to-strategy-by-buying)
   - [Remove liquidity from strategy](#remove-liquidity-from-strategy)
+  - [Remove liquidity from deprecated strategy](#remove-liquidity-from-deprecated-strategy)
 
 [Ether](#ether)
   - [Post Ether as collateral](#post-ether-as-collateral)
@@ -807,6 +810,8 @@ As with “Provide liquidity by buying”, the frontend needs to calculate the a
 
 **Limits:** Base reserves of the first pool, the virtual fyToken reserves, minus the base reserves, divided by two, of the second pool.
 
+## Strategies
+
 ### Provide liquidity to strategy by borrowing
 
 Providing liquidity to a strategy is identical to providing liquidity to a pool, with an added action at the end to convert from LP tokens to strategy tokens.
@@ -836,9 +841,6 @@ Providing liquidity to a strategy is identical to providing liquidity to a pool,
 | `  minRatio  `   | Minimum base/fyToken ratio accepted in the pool reserves.    |
 | `  maxRatio  `   | Maximum base/fyToken ratio accepted in the pool reserves.    |
 | `  receiver  `   | Receiver for the LP tokens.    |
-
-
-## Strategies
 
 ### Provide liquidity to strategy by buying
 
