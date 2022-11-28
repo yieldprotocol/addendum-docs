@@ -663,7 +663,7 @@ The reverse of borrowing to provide liquidity. It is possible to estimate in the
 
 ### Remove liquidity, repay and sell
 
-If there is a small amount of debt to repay, it might be best for the user to repay it with fyToken from the burn, and then receive the fyToken surplus.
+If there is a small amount of debt to repay, it might be best for the user to repay it with fyToken from the burn. The fyToken surplus can then be sold in the same pool.
 
 ```
   await router.batch([
@@ -672,13 +672,15 @@ If there is a small amount of debt to repay, it might be best for the user to re
     ),
     ladle.transferAction(pool, pool, LPTokensBurnt),
     ladle.routeAction(pool, ['burn', [receiver, ladle, 0, 0]),
-    ladle.repayFromLadleAction(vaultId, receiver),
+    ladle.moduleCall(repayFromLadleModule, repayFromLadleAction(vaultId, receiver, pool)),
+    ladle.routeAction(pool, ['sellFYToken', [receiver, minimumBaseReceived]),
   ])
 ```
 |Param  | Description|
 |--------------|------------------------------------------------------------------------------------|
 | `  ladle  `   | Ladle for Yield v2. |
 | `  LPTokensBurnt  `   | Amount of LP tokens burnt. |
+| `  minimumBaseReceived  `   | Minimum amount of base received from selling the surplus. |
 | ` pool  `   | Contract YieldSpace pool trading base and the fyToken for the series. |
 | `  receiver  `   | Receiver for the resulting tokens. |
 | `  vaultId  `   | Vault to repay debt from. |
