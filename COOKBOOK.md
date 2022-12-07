@@ -636,7 +636,7 @@ The maximum amount of base to use will be transferred to the pool, and any surpl
 
 ### Remove liquidity and repay
 
-The reverse of borrowing to provide liquidity. It is possible to estimate in the frontend whether using underlying to repay debt will be necessary, and if not the base can be sent to `receiver` in `burn`, and the last action omitted. Any surplus is sent to the `receiver`.
+The reverse of borrowing to provide liquidity. FYToken is used to repay debt, and any fyToken surplus is sent to the `receiver`.
 
 ```
   await ladle.batch([
@@ -644,9 +644,8 @@ The reverse of borrowing to provide liquidity. It is possible to estimate in the
       pool, ladle, lpTokensBurnt, deadline, v, r, s
     ),
     ladle.transferAction(pool, pool, lpTokensBurnt),
-    ladle.routeAction(pool, ['burn', [ladle, ladle, minRatio, minRatio]),
-    ladle.repayFromLadleAction(vaultId, receiver),
-    ladle.closeFromLadleAction(vaultId, receiver),
+    ladle.routeAction(pool, ['burn', [receiver, ladle, minRatio, minRatio]),
+    ladle.moduleCall(repayFromLadleModule(vaultId, receiver, receiver),
   ])
 ```
 |Param  | Description|
@@ -659,7 +658,7 @@ The reverse of borrowing to provide liquidity. It is possible to estimate in the
 | `  vaultId  `   | Vault to repay debt from.   |
 | `  receiver  `   | Receiver for the LP tokens.   |
 
-**Usage:** Use before maturity if borrow and pool was used, and if debt is above `minFYTokenReceived`.
+**Usage:** Use if borrow and pool was used and there is more debt than the expected fyToken obtained from the burn.
 
 ### Remove liquidity, repay and sell
 
@@ -685,13 +684,9 @@ If there is a small amount of debt to repay, it might be best for the user to re
 | `  receiver  `   | Receiver for the resulting tokens. |
 | `  vaultId  `   | Vault to repay debt from. |
 
-**Usage:** Use before maturity if borrow and pool was used, and if debt is below fyToken received.
+**Usage:** Use if borrow and pool was used, and if debt is below fyToken received.
 
 **Limits:** The debt of the user plus the base reserves of the pool must be lower than the fyToken received.
-
-**Note**: If repayFromLadle is refactored to send collateral and remainder to separate addresses, the surplus fyToken could be sold.
-
-**Note**: Cheaper than “Remove liquidity and repay”. Sometimes might make sense to leave vaults with debt instead of spending the gas to repay them.
 
 ### Remove liquidity and redeem
 
@@ -720,8 +715,6 @@ After maturity, fyToken can be redeemed by sending it to the fyToken contract.
 | ` receiver  `   | Receiver for the LP tokens.  |
 | `  0  `   | The amount of fyToken to redeem is whatever was sent to the fyToken contract.  |
 
-
-
 **Usage:** Use always after maturity, if allowed by accounting. The vault can be forgotten.
 
 ### Remove liquidity and sell
@@ -748,39 +741,9 @@ Before maturity, the fyToken resulting from removing liquidity can be sold withi
 
 **Limits:** The fyToken plus base received must be lower than the base reserves of the pool.
 
-**Usage:** Use before maturity if buy and pool was used.
+**Usage:** Use if the user doesn't have a vault with the appropriate series.
 
-**Note:** Can also be used close to maturity in “borrow and pool” to save gas .
-
-### Remove liquidity, redeem and close
-
-When removing liquidity after maturity, all the proceeds can be converted into base to repay without rolling the debt in the vault.
-
-```
-  await ladle.batch([
-    ladle.forwardPermitAction(
-      pool, ladle, LPTokensBurnt, deadline, v, r, s
-    ),
-    ladle.transferAction(pool, pool, LPTokensBurnt),
-    ladle.routeAction(pool, ['burn', [ladle, fyToken, minRatio, maxRatio]),
-    ladle.redeemAction(seriesId, ladle, 0),
-    ladle.closeFromLadleAction(vaultId, receiver),
-  ])
-```
-
-|Param  | Description|
-|--------------|------------------------------------------------------------------------------------|
-| `  ladle  `   |  Ladle for Yield v2.      |
-| `  LPTokensBurnt  `   |  Amount of LP tokens burnt.      |
-| ` pool  `   |  Contract YieldSpace pool trading base and the fyToken for the series.      |
-| `  fyToken  `   |  FYToken contract for the pool.      |
-| `  minRatio  `   |  Minimum base/fyToken ratio accepted in the pool reserves.      |
-| `  maxRatio  `   |  Maximum base/fyToken ratio accepted in the pool reserves.      |
-| `  seriesId  `   |  Series for the fyToken.      |
-| ` vaultId  `   |  Vault to repay debt from.      |
-
-
-**Usage:** Don’t use, unless forced to repay vaults.
+**Note:** Can also be used close to maturity in “borrow and pool” to save gas.
 
 ### Roll liquidity before maturity
 
