@@ -53,7 +53,6 @@
   - [Remove liquidity, repay and sell](#remove-liquidity-repay-and-sell)
   - [Remove liquidity and redeem](#remove-liquidity-and-redeem)
   - [Remove liquidity and sell](#remove-liquidity-and-sell)
-  - [Remove liquidity, redeem and close](#remove-liquidity-redeem-and-close)
   - [Roll liquidity before maturity](#roll-liquidity-before-maturity)
 
  [Strategies](#strategies)
