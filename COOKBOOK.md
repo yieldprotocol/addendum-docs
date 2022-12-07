@@ -830,6 +830,7 @@ Providing liquidity to a strategy is identical to providing liquidity to a pool,
 | `  strategy  `   | Contract for investing in Yield v2 tokens.     |
 | `  receiver  `   | Receiver for the LP tokens.     |
 
+
 ### Remove liquidity from strategy
 
 Removing liquidity from a strategy has an initial two steps in which the strategy tokens are burnt for LP tokens deposited in the appropriate pool, and then continues like a normal batch to remove liquidity. Note that the vault debt could be in a different fyToken than received, if the strategy rolled pools. The debt in the vault would need to be rolled for the batches that repay with fyToken to work. Remember that if there are several actions with slippage protection, we only need to set a value in the last one.
@@ -861,6 +862,56 @@ Removing liquidity from a strategy has an initial two steps in which the strateg
 **Limits:** If there is too much fyToken received to be sold in the pool, the fyToken received will need to be held until it can be sold or redeemed.
 
 **Note:** Unlikely to remove liquidity before maturity with strategies.
+
+### Migrate from deprecated strategy
+
+Migrate strategy tokens from v1 to v2.
+
+```
+  await ladle.batch([
+    ladle.forwardPermitAction(
+      strategyV1, ladle, strategyV1TokensHeld, deadline, v, r, s
+    ),
+    ladle.transferAction(strategyV1, strategyV1, strategyV1TokensHeld),
+    ladle.routeAction(strategyV1, ['burn', [strategyV2]),
+    ladle.routeAction(strategyV2, ['mint', [receiver]),
+  ])
+```
+
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  strategyV1  `   | Deprecated contract for investing in Yield v2 tokens.     |
+| `  strategyV2  `   | Current contract for investing in Yield v2 tokens.     |
+| `  ladle  `   | Ladle for Yield v2.     |
+| `  strategyV1TokensHeld  `   | Amount of strategy v1 tokens held by the caller.   |
+| `  receiver  `   | Receiver for the LP tokens.     |
+
+**Usage:** Use when providing liquidity, if the user holds tokens of a deprecated strategy.
+
+### Migrate from deprecated strategy on providing liquidity
+
+Holding strategy tokens of two different versions is complicated from a UX perspective. When providing liquidity we can prefix the batch with an operation to migrate strategy tokens from v1 to v2 as described above. We do a single strategy v2 mint at the end.
+
+```
+  await ladle.batch([
+    ladle.forwardPermitAction(
+      strategyV1, ladle, strategyV1TokensHeld, deadline, v, r, s
+    ),
+    ladle.transferAction(strategyV1, strategyV1, strategyV1TokensHeld),
+    ladle.routeAction(strategyV1, ['burn', [strategyV2]),
+    … (follow with any of the provide liquidity recipes)
+  ])
+```
+
+|Param  | Description|
+|--------------|------------------------------------------------------------------------------------|
+| `  strategyV1  `   | Deprecated contract for investing in Yield v2 tokens.     |
+| `  strategyV2  `   | Current contract for investing in Yield v2 tokens.     |
+| `  ladle  `   | Ladle for Yield v2.     |
+| `  strategyV1TokensHeld  `   | Amount of strategy v1 tokens held by the caller.   |
+| `  receiver  `   | Receiver for the LP tokens.     |
+
+**Usage:** Use when providing liquidity, if the user holds tokens of a deprecated strategy.
 
 ### Remove liquidity from deprecated strategy
 
