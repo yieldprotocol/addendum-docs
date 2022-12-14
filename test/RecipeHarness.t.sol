@@ -109,7 +109,7 @@ contract ZeroStateTest is ZeroState {
 
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ladle.joins(ilkId)), posted));
-        batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(0), posted, borrowed));
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), other, posted, borrowed));
         
         vm.prank(user);
         ladle.batch(batch);
@@ -130,7 +130,7 @@ contract ZeroStateTest is ZeroState {
 
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ladle.joins(ilkId)), posted));
-        batch.push(abi.encodeWithSelector(ladle.serve.selector, bytes12(0), address(0), uint128(posted), uint128(borrowed), type(uint128).max));
+        batch.push(abi.encodeWithSelector(ladle.serve.selector, bytes12(0), other, uint128(posted), uint128(borrowed), type(uint128).max));
         
         vm.prank(user);
         ladle.batch(batch);
