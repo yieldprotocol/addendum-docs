@@ -32,3 +32,5 @@ crytic-export/
 # Typescript
 dist/
 
+# Libs
+lib/
