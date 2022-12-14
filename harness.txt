@@ -1,0 +1,234 @@
+SeriesId:  0x30303039
+IlkId:  0x3030
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 607535)
+[32m[PASS][0m testBuildServe() (gas: 830142)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 401.05ms
+IlkId:  0x3031
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 640603)
+[32m[PASS][0m testBuildServe() (gas: 865710)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 435.72ms
+IlkId:  0x3032
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 677556)
+[32m[PASS][0m testBuildServe() (gas: 902663)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 404.72ms
+IlkId:  0x3033
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 624073)
+[32m[PASS][0m testBuildServe() (gas: 849180)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 420.77ms
+IlkId:  0x3034
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 719942)
+[32m[PASS][0m testBuildServe() (gas: 945049)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 392.93ms
+IlkId:  0x3036
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 640674)
+[32m[PASS][0m testBuildServe() (gas: 865781)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 393.73ms
+IlkId:  0x3037
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 662972)
+[32m[PASS][0m testBuildServe() (gas: 888079)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 440.25ms
+IlkId:  0x3039
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 5646)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildServe() (gas: 5601)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildVault() (gas: 5647)
+Logs:
+  Ilk not enabled for series, skipping test
+
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 356.48ms
+IlkId:  0x3130
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 683825)
+[32m[PASS][0m testBuildServe() (gas: 908932)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 399.83ms
+IlkId:  0x3138
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 642465)
+[32m[PASS][0m testBuildServe() (gas: 867572)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 471.15ms
+IlkId:  0x3330
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 5646)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildServe() (gas: 5601)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildVault() (gas: 5647)
+Logs:
+  Ilk not enabled for series, skipping test
+
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 379.94ms
+IlkId:  0x3331
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 5646)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildServe() (gas: 5601)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildVault() (gas: 5647)
+Logs:
+  Ilk not enabled for series, skipping test
+
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 438.70ms
+IlkId:  0x3332
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 5646)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildServe() (gas: 5601)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildVault() (gas: 5647)
+Logs:
+  Ilk not enabled for series, skipping test
+
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 424.57ms
+IlkId:  0x3333
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 5646)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildServe() (gas: 5601)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildVault() (gas: 5647)
+Logs:
+  Ilk not enabled for series, skipping test
+
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 401.55ms
+IlkId:  0x3334
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 672207)
+[32m[PASS][0m testBuildServe() (gas: 897314)
+[32m[PASS][0m testBuildVault() (gas: 78608)
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 501.12ms
+IlkId:  0x3335
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 5646)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildServe() (gas: 5601)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildVault() (gas: 5647)
+Logs:
+  Ilk not enabled for series, skipping test
+
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 402.35ms
+IlkId:  0x3336
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 5646)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildServe() (gas: 5601)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildVault() (gas: 5647)
+Logs:
+  Ilk not enabled for series, skipping test
+
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 448.54ms
+IlkId:  0x3337
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 5646)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildServe() (gas: 5601)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildVault() (gas: 5647)
+Logs:
+  Ilk not enabled for series, skipping test
+
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 412.63ms
+IlkId:  0x3338
+No files changed, compilation skipped
+
+Running 3 tests for test/RecipeHarness.t.sol:ZeroStateTest
+[32m[PASS][0m testBuildPour() (gas: 5646)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildServe() (gas: 5601)
+Logs:
+  Ilk not enabled for series, skipping test
+
+[32m[PASS][0m testBuildVault() (gas: 5647)
+Logs:
+  Ilk not enabled for series, skipping test
+
+Test result: [32mok[0m. 3 passed; 0 failed; finished in 509.17ms
