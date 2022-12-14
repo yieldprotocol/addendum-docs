@@ -1,26 +1,30 @@
 #!/bin/bash
-SERIES_IDS=(\ 
-  0x30303039\ 
-  0x30313039\ 
-  0x30323039\ 
-  0x31383039\  
-  0x0030FF00028B\ 
-  0x0031FF00028B\ 
-  0x0032FF00028B\ 
-  0x0138FF00028B\ 
+SERIES_STRATEGIES=(\ 
+# 0x30303039\ 
+# 0x30313039\ 
+# 0x30323039\ 
+# 0x31383039\  
+# 0x0030FF00028B\ 
+# 0x0031FF00028B\ 
+# 0x0032FF00028B\ 
+# 0x0138FF00028B\ 
+  0x0030FF00028B,0xEA7577bE7C29FbD8246FE69408bf4Bc7b6668d2a\ 
+  0x0031FF00028B,0xCc28081d668677007FCDafbCFfD132B69a44F6f1\ 
+  0x0032FF00028B,0xa6c77A07786d0F40540bB72059905b357cF81881\ 
+  0x0138FF00028B,0x7CA19022b0e371BFB545E3e91c0AEa4A3DBB9C91\ 
 )
 
 ILK_IDS=(\ 
-  0x3030 # ETH \ 
+# 0x3030 # ETH \ 
   0x3031 # DAI \ 
-  0x3032 # USDC \ 
-  0x3033 # WBTC \ 
-  0x3034 # WSTETH \ 
-  0x3036 # LINK \ 
-  0x3037 # ENS \ 
+# 0x3032 # USDC \ 
+# 0x3033 # WBTC \ 
+# 0x3034 # WSTETH \ 
+# 0x3036 # LINK \ 
+# 0x3037 # ENS \ 
 # 0x3039 # YVUSDC \ 
-  0x3130 # UNI \ 
-  0x3138 # FRAX \ 
+# 0x3130 # UNI \ 
+# 0x3138 # FRAX \ 
 # 0x3330 # YSDAI6MMSASSET \ 
 # 0x3331 # YSDAI6MJDASSET \ 
 # 0x3332 # YSUSDC6MMSASSET \ 
@@ -61,10 +65,14 @@ export RPC="HARNESS"
 export NETWORK="MAINNET"
 export MOCK=false
 
-for SERIES_ID_ in ${SERIES_IDS[@]}; do
+for SERIES_STRATEGY in ${SERIES_STRATEGIES[@]}; do
+  echo $SERIES_STRATEGY
+  SERIES_ID_=`echo $SERIES_STRATEGY | sed 's/,.*//g'`
+  STRATEGY_=`echo $SERIES_STRATEGY | sed 's/.*,//g'`
   echo "SeriesId: " $SERIES_ID_
+  echo "Strategy: " $STRATEGY_
   for ILK_ID_ in ${ILK_IDS[@]}; do
     echo "IlkId: " $ILK_ID_
-      SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test --match-path test/RecipeHarness.t.sol $1
+    STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test --match-path test/RecipeHarness.t.sol $1
   done
 done

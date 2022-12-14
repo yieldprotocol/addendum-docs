@@ -1,19 +1,23 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity >=0.8.13;
 
-import "forge-std/Test.sol";
-import "forge-std/console2.sol";
-import { IERC20 } from "@yield-protocol/utils-v2/contracts/token/IERC20.sol";
-import { IERC2612 } from "@yield-protocol/utils-v2/contracts/token/IERC2612.sol";
-import { ERC20Permit } from "@yield-protocol/utils-v2/contracts/token/ERC20Permit.sol";
-import { IERC20Metadata } from "@yield-protocol/utils-v2/contracts/token/IERC20Metadata.sol";
-import "@yield-protocol/vault-v2/contracts/interfaces/DataTypes.sol";
-import { ICauldron } from "@yield-protocol/vault-v2/contracts/interfaces/ICauldron.sol";
-import { ILadle } from "@yield-protocol/vault-v2/contracts/interfaces/ILadle.sol";
-import { IFYToken } from "@yield-protocol/vault-v2/contracts/interfaces/IFYToken.sol";
-import { CastBytes32Bytes6 } from "@yield-protocol/utils-v2/contracts/cast/CastBytes32Bytes6.sol";
+import "lib/forge-std/src/Test.sol";
+import "lib/forge-std/src/console2.sol";
+import "lib/vault-v2/packages/foundry/contracts/interfaces/DataTypes.sol";
+// import { IERC20 } from "lib/yield-utils-v2/contracts/token/IERC20.sol";
+import { IERC2612 } from "lib/yield-utils-v2/contracts/token/IERC2612.sol";
+import { ERC20Permit } from "lib/yield-utils-v2/contracts/token/ERC20Permit.sol";
+import { IERC20Metadata } from "lib/yield-utils-v2/contracts/token/IERC20Metadata.sol";
+import { ICauldron } from "lib/vault-v2/packages/foundry/contracts/interfaces/ICauldron.sol";
+import { ILadle } from "lib/vault-v2/packages/foundry/contracts/interfaces/ILadle.sol";
+import { IFYToken } from "lib/vault-v2/packages/foundry/contracts/interfaces/IFYToken.sol";
+import { IPool } from "lib/yieldspace-tv/src/interfaces/IPool.sol";
+import { IStrategy } from "lib/strategy-v2/contracts/interfaces/IStrategy.sol";
+import { CastBytes32Bytes6 } from "lib/yield-utils-v2/contracts/cast/CastBytes32Bytes6.sol";
 import { TestConstants } from "./TestConstants.sol";
 import { TestExtensions } from "./TestExtensions.sol";
+
+import { Strategy } from "lib/strategy-v2/contracts/Strategy.sol";
 
 /// @dev This test harness tests that basic functions on the Ladle are functional.
 
@@ -36,15 +40,21 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
     IFYToken fyToken;
     IERC20 ilk;
     IERC20 base;
+    IJoin ilkJoin;
+    IJoin baseJoin;
+    IPool pool;
+    IStrategy strategy;
 
     uint256 fyTokenUnit;
     uint256 ilkUnit;
     uint256 baseUnit;
+    uint256 poolUnit;
 
     bytes[] batch;
 
     bool ilkEnabled; // Skip tests if the ilk is not enabled for the series
     bool ilkInCauldron; // Skip tests if the ilk is not in the cauldron
+    bool matchStrategy; // Skip tests if the series is not the selected for the strategy
 
     modifier canSkip() {
         if (!ilkEnabled) {
@@ -68,6 +78,7 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         ladle = ILadle(addresses[network][LADLE]);
         vm.label(address(ladle), "ladle");
 
+        strategy = IStrategy(vm.envAddress(STRATEGY));
         seriesId = vm.envOr(SERIES_ID, bytes32(0)).b6();
         ilkId = vm.envOr(ILK_ID, bytes32(0)).b6();
         baseId = cauldron.series(seriesId).baseId;
@@ -79,10 +90,16 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
             fyToken = IFYToken(cauldron.series(seriesId).fyToken);
             ilk = IERC20(cauldron.assets(ilkId));
             base = IERC20(cauldron.assets(baseId));
+            ilkJoin = IJoin(ladle.joins(ilkId));
+            baseJoin = IJoin(ladle.joins(baseId));
+            pool = IPool(ladle.pools(seriesId));
 
             fyTokenUnit = 10 ** IERC20Metadata(address(fyToken)).decimals();
             ilkUnit = 10 ** IERC20Metadata(address(ilk)).decimals();
             baseUnit = 10 ** IERC20Metadata(address(base)).decimals();
+            poolUnit = 10 ** IERC20Metadata(address(pool)).decimals();
+            
+            matchStrategy = (address(strategy.fyToken()) == address(fyToken));
         }
     }
 }
@@ -108,11 +125,13 @@ contract ZeroStateTest is ZeroState {
 
 
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ladle.joins(ilkId)), posted));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
         batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), other, posted, borrowed));
         
         vm.prank(user);
         ladle.batch(batch);
+
+        assertEq(fyToken.balanceOf(other), borrowed);
     }
 
 
@@ -129,10 +148,47 @@ contract ZeroStateTest is ZeroState {
         ilk.approve(address(ladle), posted);
 
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ladle.joins(ilkId)), posted));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
         batch.push(abi.encodeWithSelector(ladle.serve.selector, bytes12(0), other, uint128(posted), uint128(borrowed), type(uint128).max));
         
         vm.prank(user);
         ladle.batch(batch);
+
+        assertApproxEqAbs(base.balanceOf(other), borrowed, 1); // TODO: Is it ok that we get 1 wei less thna expected?
+    }
+
+    function testProvideLiquidityByBorrowing() public canSkip {
+        // ladle.batch([
+        //   ladle.transfer(base, baseJoin, baseToFYToken),
+        //   ladle.transfer(base, pool, baseToPool),
+        //   ladle.pour(0, pool, baseToFYToken, baseToFYToken),
+        //   ladle.route(pool, ['mint', [strategy, receiver, minRatio, maxRatio]),
+        //   ladle.route(strategy, ['mint', [receiver]),
+        // ])
+
+        uint256 totalProvided = baseUnit;
+        uint256 poolBaseBalance = pool.getBaseBalance();
+        uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
+        uint256 fyTokenToPool = totalProvided * poolFYTokenBalance / (poolBaseBalance + poolFYTokenBalance);
+        uint256 baseToPool = totalProvided - fyTokenToPool;
+
+        cash(base, user, totalProvided);
+        vm.prank(user);
+        base.approve(address(ladle), totalProvided);
+
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, baseId, 0));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(baseJoin), fyTokenToPool));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseToPool));
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(pool), fyTokenToPool, fyTokenToPool));
+        batch.push(abi.encodeWithSelector(ladle.route.selector, address(pool), 
+            abi.encodeWithSelector(IPool.mint.selector, address(strategy), address(user), 0, type(uint256).max)
+        ));
+        batch.push(abi.encodeWithSelector(ladle.route.selector, address(strategy), 
+            abi.encodeWithSelector(IStrategy.mint.selector, address(user))
+        ));
+
+        vm.prank(user);
+        ladle.batch(batch);
+
     }
 }
