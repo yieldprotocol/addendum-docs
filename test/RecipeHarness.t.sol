@@ -158,6 +158,10 @@ contract ZeroStateTest is ZeroState {
     }
 
     function testProvideLiquidityByBorrowing() public canSkip {
+        borrowAndPool(user, baseUnit);
+    }
+
+    function borrowAndPool(address guy, uint256 totalBase) public {
         // ladle.batch([
         //   ladle.transfer(base, baseJoin, baseToFYToken),
         //   ladle.transfer(base, pool, baseToPool),
@@ -166,29 +170,43 @@ contract ZeroStateTest is ZeroState {
         //   ladle.route(strategy, ['mint', [receiver]),
         // ])
 
-        uint256 totalProvided = baseUnit;
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
-        uint256 fyTokenToPool = totalProvided * poolFYTokenBalance / (poolBaseBalance + poolFYTokenBalance);
-        uint256 baseToPool = totalProvided - fyTokenToPool;
+        uint256 fyTokenToPool = totalBase * poolFYTokenBalance / (poolBaseBalance + poolFYTokenBalance);
+        uint256 baseToPool = totalBase - fyTokenToPool;
 
-        cash(base, user, totalProvided);
-        vm.prank(user);
-        base.approve(address(ladle), totalProvided);
+        cash(base, guy, totalBase);
+        vm.prank(guy);
+        base.approve(address(ladle), totalBase);
 
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, baseId, 0));
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(baseJoin), fyTokenToPool));
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseToPool));
         batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(pool), fyTokenToPool, fyTokenToPool));
         batch.push(abi.encodeWithSelector(ladle.route.selector, address(pool), 
-            abi.encodeWithSelector(IPool.mint.selector, address(strategy), address(user), 0, type(uint256).max)
+            abi.encodeWithSelector(IPool.mint.selector, address(strategy), address(guy), 0, type(uint256).max)
         ));
         batch.push(abi.encodeWithSelector(ladle.route.selector, address(strategy), 
-            abi.encodeWithSelector(IStrategy.mint.selector, address(user))
+            abi.encodeWithSelector(IStrategy.mint.selector, address(guy))
         ));
 
-        vm.prank(user);
+        vm.prank(guy);
         ladle.batch(batch);
+    }
+
+//  await router.batch([
+//    ladle.forwardPermitAction(
+//      strategy, ladle, strategyTokensBurnt, deadline, v, r, s
+//    ),
+//    ladle.transferAction(strategy, strategy, strategyTokensBurnt),
+//    ladle.routeAction(strategy, ['burn', [pool]),
+//    … (follow with any of the 5 remove liquidity batches for removing liquidity)
+//    … (without the permit or the transfer, the pool tokens are in the pool already)
+//  ])
+}
+
+abstract contract WithStrategyTokens is ZeroState {
+    function setUp() public override {
 
     }
 }
