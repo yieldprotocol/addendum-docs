@@ -1,0 +1,5 @@
+
+[submodule "lib/strategy-v2"]
+	path = lib/strategy-v2
+	url = https://github.com/yieldprotocol/strategy-v2
+	branch = 743150f

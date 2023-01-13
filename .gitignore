@@ -1,0 +1,33 @@
+# Temp & IDE files
+.vscode/
+*~
+*.swp
+*.swo
+
+# Packaging
+*.tar.gz
+*.tgz
+package/
+
+# Secret files
+.etherscanKey
+.infuraKey
+.mythxKey
+.secret
+.env
+
+# Foundry
+artifacts/
+cache/
+lcov.info
+
+# Solidity-coverage
+coverage/
+.coverage_contracts/
+coverage.json
+
+# Crytic
+crytic-export/
+
+# Typescript
+dist/
