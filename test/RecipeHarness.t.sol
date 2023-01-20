@@ -111,6 +111,15 @@ contract ZeroStateTest is ZeroState {
         assertEq(cauldron.vaults(vaultId).owner, user);
     }
 
+    function testBuildDestoryVault() public canSkip {
+        vm.startPrank(user);
+        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        assertEq(cauldron.vaults(vaultId).owner, user);
+        ladle.destroy(vaultId);
+        assertEq(cauldron.vaults(vaultId).owner, address(0));
+        vm.stopPrank();
+    }
+
     function testBuildPour() public canSkip {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
