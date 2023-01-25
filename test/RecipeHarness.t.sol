@@ -97,10 +97,10 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
             vm.label(address(baseJoin), "baseJoin");
             pool = IPool(ladle.pools(seriesId));
 
-            fyTokenUnit = 10**IERC20Metadata(address(fyToken)).decimals();
-            ilkUnit = 10**IERC20Metadata(address(ilk)).decimals();
-            baseUnit = 10**IERC20Metadata(address(base)).decimals();
-            poolUnit = 10**IERC20Metadata(address(pool)).decimals();
+            fyTokenUnit = 10 ** IERC20Metadata(address(fyToken)).decimals();
+            ilkUnit = 10 ** IERC20Metadata(address(ilk)).decimals();
+            baseUnit = 10 ** IERC20Metadata(address(base)).decimals();
+            poolUnit = 10 ** IERC20Metadata(address(pool)).decimals();
 
             matchStrategy = (address(strategy.fyToken()) == address(fyToken));
         }
@@ -117,14 +117,14 @@ contract ZeroStateTest is ZeroState {
     // Build a vault
     function testBuildVault() public canSkip {
         vm.prank(user);
-        (bytes12 vaultId, ) = ladle.build(seriesId, ilkId, 0);
+        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
         assertEq(cauldron.vaults(vaultId).owner, user);
     }
 
     // Destroy a vault
     function testDestoryVault() public canSkip {
         vm.startPrank(user);
-        (bytes12 vaultId, ) = ladle.build(seriesId, ilkId, 0);
+        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
         assertEq(cauldron.vaults(vaultId).owner, user);
         ladle.destroy(vaultId);
         assertEq(cauldron.vaults(vaultId).owner, address(0));
@@ -135,12 +135,12 @@ contract ZeroStateTest is ZeroState {
     function testMergeVaults() public canSkip {
         // Get borrowed amount
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10**debt.dec);
+        uint256 borrowed = debt.min * (10 ** debt.dec);
         borrowed = borrowed == 0 ? baseUnit : borrowed;
 
         // Get posted amount
         DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
-        (uint256 borrowValue, ) = spot.oracle.peek(baseId, ilkId, borrowed);
+        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
         uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
 
         // Approve amounts for users
@@ -150,13 +150,13 @@ contract ZeroStateTest is ZeroState {
 
         // Build first vault
         vm.startPrank(user);
-        (bytes12 vaultId1, ) = ladle.build(seriesId, ilkId, 0);
+        (bytes12 vaultId1,) = ladle.build(seriesId, ilkId, 0);
         ladle.pour(vaultId1, user, posted.i128(), borrowed.i128());
         vm.stopPrank();
 
         // Build second vault
         vm.startPrank(user);
-        (bytes12 vaultId2, ) = ladle.build(seriesId, ilkId, 0);
+        (bytes12 vaultId2,) = ladle.build(seriesId, ilkId, 0);
         ladle.pour(vaultId2, other, posted.i128(), borrowed.i128());
         vm.stopPrank();
 
@@ -166,21 +166,8 @@ contract ZeroStateTest is ZeroState {
         uint128 inkSum = balances.ink + otherBalances.ink;
         uint128 artSum = balances.art + otherBalances.art;
 
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.stir.selector,
-                vaultId1,
-                vaultId2,
-                balances.ink,
-                balances.art
-            )
-        );
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.destroy.selector, 
-                vaultId1
-            )
-        );
+        batch.push(abi.encodeWithSelector(ladle.stir.selector, vaultId1, vaultId2, balances.ink, balances.art));
+        batch.push(abi.encodeWithSelector(ladle.destroy.selector, vaultId1));
 
         vm.prank(user);
         ladle.batch(batch);
@@ -191,7 +178,47 @@ contract ZeroStateTest is ZeroState {
     }
 
     // Split a vault into two
-    function testSplitVaults() public canSkip {}
+    function testSplitVaults() public canSkip {
+        // Get borrowed amount
+        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
+        uint256 borrowed = debt.min * (10 ** debt.dec);
+        borrowed = borrowed == 0 ? baseUnit : borrowed;
+
+        // Get posted amount
+        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
+        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
+        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
+
+        // Approve amounts for users
+        cash(ilk, user, posted);
+        vm.prank(user);
+        ilk.approve(address(ilkJoin), posted);
+
+        // Build vault
+        vm.startPrank(user);
+        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        ladle.pour(vaultId, user, posted.i128(), borrowed.i128());
+        vm.stopPrank();
+
+        // Get vault balances
+        DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
+
+        // ladle.stir doesn't use getVaults and can't referenced the cachedVaultId
+        // batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
+        // batch.push(abi.encodeWithSelector(ladle.stir.selector, vaultId, 0, posted / 2, 0));
+
+        vm.startPrank(user);
+        (bytes12 newVaultId,) = ladle.build(seriesId, ilkId, 0);
+        ladle.stir(vaultId, newVaultId, uint128(posted / 2), uint128(borrowed / 2));
+        vm.stopPrank();
+
+        DataTypes.Balances memory newBalances = cauldron.balances(vaultId);
+        DataTypes.Balances memory otherNewBalances = cauldron.balances(newVaultId);
+        assertEq(newBalances.ink, initialBalances.ink / 2);
+        assertEq(newBalances.art, initialBalances.art / 2);
+        assertEq(otherNewBalances.ink, initialBalances.ink / 2);
+        assertEq(otherNewBalances.art, initialBalances.art / 2);
+    }
 
     /*//////////////////////////////////////////////////////////////
     /// COLLATERAL AND BORROWING
@@ -200,36 +227,19 @@ contract ZeroStateTest is ZeroState {
     // Post ERC20 collateral ????
     function testBuildPour() public canSkip {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10**debt.dec); // We borrow `dust`
+        uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
         borrowed = borrowed == 0 ? baseUnit : borrowed; // If dust is 0 (ETH/ETH), we borrow 1 base unit
 
         DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
-        (uint256 borrowValue, ) = spot.oracle.peek(baseId, ilkId, borrowed);
+        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
         uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
         cash(ilk, user, posted);
         vm.prank(user);
         ilk.approve(address(ladle), posted);
 
-        batch.push(
-            abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0)
-        );
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.transfer.selector,
-                ilk,
-                address(ilkJoin),
-                posted
-            )
-        );
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.pour.selector,
-                bytes12(0),
-                other,
-                posted,
-                borrowed
-            )
-        );
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), other, posted, borrowed));
 
         vm.prank(user);
         ladle.batch(batch);
@@ -240,35 +250,21 @@ contract ZeroStateTest is ZeroState {
     // Post ERC20 collateral and borrow underlyiung ????
     function testBuildServe() public canSkip {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10**debt.dec); // We borrow `dust` but in base, which always will be a bit more than `dust`
+        uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust` but in base, which always will be a bit more than `dust`
         borrowed = borrowed == 0 ? baseUnit : borrowed; // If dust is 0 (ETH/ETH), we borrow 1 base unit
 
         DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
-        (uint256 borrowValue, ) = spot.oracle.peek(baseId, ilkId, borrowed);
+        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
         uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
         cash(ilk, user, posted);
         vm.prank(user);
         ilk.approve(address(ladle), posted);
 
-        batch.push(
-            abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0)
-        );
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.transfer.selector,
-                ilk,
-                address(ilkJoin),
-                posted
-            )
-        );
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
         batch.push(
             abi.encodeWithSelector(
-                ladle.serve.selector,
-                bytes12(0),
-                other,
-                uint128(posted),
-                uint128(borrowed),
-                type(uint128).max
+                ladle.serve.selector, bytes12(0), other, uint128(posted), uint128(borrowed), type(uint128).max
             )
         );
 
@@ -291,7 +287,9 @@ contract ZeroStateTest is ZeroState {
     //////////////////////////////////////////////////////////////*/
 
     // Provide liquidity by borrowing
-    function testProvideLiquidityByBorrowing() public canSkip {}
+    function testProvideLiquidityByBorrowing() public canSkip {
+
+    }
 
     // Provide liquidity by borrowing, using only underlying
     function testProvideLiquidityWithUnderlying() public canSkip {}
@@ -333,62 +331,28 @@ contract ZeroStateTest is ZeroState {
         // ])
 
         uint256 poolBaseBalance = pool.getBaseBalance();
-        uint256 poolFYTokenBalance = pool.getFYTokenBalance() -
-            pool.totalSupply();
-        uint256 fyTokenToPool = (totalBase * poolFYTokenBalance) /
-            (poolBaseBalance + poolFYTokenBalance);
+        uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
+        uint256 fyTokenToPool = (totalBase * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
         uint256 baseToPool = totalBase - fyTokenToPool;
 
         cash(base, guy, totalBase);
         vm.prank(guy);
         base.approve(address(ladle), totalBase);
 
-        batch.push(
-            abi.encodeWithSelector(ladle.build.selector, seriesId, baseId, 0)
-        );
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.transfer.selector,
-                base,
-                address(baseJoin),
-                fyTokenToPool
-            )
-        );
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.transfer.selector,
-                base,
-                address(pool),
-                baseToPool
-            )
-        );
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.pour.selector,
-                bytes12(0),
-                address(pool),
-                fyTokenToPool,
-                fyTokenToPool
-            )
-        );
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, baseId, 0));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(baseJoin), fyTokenToPool));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseToPool));
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(pool), fyTokenToPool, fyTokenToPool));
         batch.push(
             abi.encodeWithSelector(
                 ladle.route.selector,
                 address(pool),
-                abi.encodeWithSelector(
-                    IPool.mint.selector,
-                    address(strategy),
-                    address(guy),
-                    0,
-                    type(uint256).max
-                )
+                abi.encodeWithSelector(IPool.mint.selector, address(strategy), address(guy), 0, type(uint256).max)
             )
         );
         batch.push(
             abi.encodeWithSelector(
-                ladle.route.selector,
-                address(strategy),
-                abi.encodeWithSelector(IStrategy.mint.selector, address(guy))
+                ladle.route.selector, address(strategy), abi.encodeWithSelector(IStrategy.mint.selector, address(guy))
             )
         );
 
