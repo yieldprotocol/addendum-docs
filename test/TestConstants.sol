@@ -25,7 +25,7 @@ contract TestConstants {
     string public constant LADLE = "LADLE";
     string public constant STRATEGY = "STRATEGY";
 
-    mapping (string => mapping (string => address)) public addresses;
+    mapping(string => mapping(string => address)) public addresses;
 
     constructor() {
         addresses[MAINNET][TIMELOCK] = 0x3b870db67a45611CF4723d44487EAF398fAc51E3;
