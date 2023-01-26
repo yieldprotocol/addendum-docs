@@ -227,7 +227,7 @@ contract ZeroStateTest is ZeroState {
     /// COLLATERAL AND BORROWING
     //////////////////////////////////////////////////////////////*/
 
-    // Post ERC20 collateral ????
+    // Post ERC20 collateral and borrow fyToken
     function testBuildPour() public canSkip {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
@@ -250,7 +250,7 @@ contract ZeroStateTest is ZeroState {
         assertEq(fyToken.balanceOf(other), borrowed);
     }
 
-    // Post ERC20 collateral and borrow underlyiung ????
+    // Post ERC20 collateral and borrow underlyiung
     function testBuildServe() public canSkip {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust` but in base, which always will be a bit more than `dust`
@@ -277,6 +277,39 @@ contract ZeroStateTest is ZeroState {
         assertApproxEqAbs(base.balanceOf(other), borrowed, 1); // TODO: Is it ok that we get 1 wei less thna expected?
     }
 
+    // Withdraw ERC20 collateral
+    function testWithdrawCollateral() public canSkip {
+        // Get borrowed amount
+        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
+        uint256 borrowed = debt.min * (10 ** debt.dec);
+        borrowed = borrowed == 0 ? baseUnit : borrowed;
+
+        // Get posted amount
+        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
+        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
+        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
+
+        // Approve amounts for user
+        cash(ilk, user, posted);
+        vm.prank(user);
+        ilk.approve(address(ilkJoin), posted);
+
+        // Build vault
+        vm.startPrank(user);
+        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        ladle.pour(vaultId, user, posted.i128(), 0);
+        vm.stopPrank();
+
+        // Get vault balances
+        DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
+
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, user, posted.i128() * -1, 0));
+        batch.push(abi.encodeWithSelector(ladle.destroy.selector, vaultId));    // will only succeed if vault has no collateral or debt
+
+        vm.prank(user);
+        ladle.batch(batch);
+    }
+
     /*//////////////////////////////////////////////////////////////
     /// DEBT REPAYMENT
     //////////////////////////////////////////////////////////////*/
@@ -284,6 +317,33 @@ contract ZeroStateTest is ZeroState {
     /*//////////////////////////////////////////////////////////////
     /// LENDING
     //////////////////////////////////////////////////////////////*/
+
+    // Lend
+    function testLend() public canSkip {
+        lend(user, baseUnit);
+    }
+
+    // Close lending before maturity 
+    function testCloseLendBeforeMaturity() public canSkip {
+        lend(user, baseUnit);
+    }
+
+    // Close lending after maturity
+    function testCloseLendAfterMaturity() public canSkip {
+        lend(user, baseUnit);
+    }
+
+    // Roll lending before maturity
+    function testRollLendingBeforeMaturity() public canSkip {
+        lend(user, baseUnit);
+    }
+
+    // Roll lending after maturity
+    function testRollLendingAfterMaturity() public canSkip {
+        lend(user, baseUnit);
+    }
+
+    function lend(address guy, uint256 totalBase);
 
     /*//////////////////////////////////////////////////////////////
     /// LIQUIDITY PROVIDING
@@ -330,6 +390,11 @@ contract ZeroStateTest is ZeroState {
     function testProvideLiquidityByBuying() public canSkip {
         uint256 baseWithSlippage = baseUnit;
         uint256 fyTokenToBuy = baseUnit;
+
+        uint256 poolBaseBalance = pool.getBaseBalance();
+        uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
+        uint256 fyTokenToPool = (baseUnit * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
+                                // (1 * 50.89) / (148.28 * 50.89) 
 
         cash(base, user, baseUnit);
         vm.prank(user);
@@ -446,6 +511,19 @@ contract ZeroStateTest is ZeroState {
         borrowAndPoolStrategy(user, baseUnit);
     }
 
+    // Provide liquidity to strategy by buying
+    function testProvideLiquidityToStrategyByBuying() public canSkip {}
+
+    // Remove liquidity from strategy
+    function testRemoveLiquidityFromStrategy() public canSkip {
+        borrowAndPoolStrategy(user, baseUnit);
+    }
+
+    // Remove liquidity from deprecated strategy
+    function testRemoveLiquidityFromDeprecatedStrategy() public canSkip {
+        borrowAndPoolStrategy(user, baseUnit);
+    }
+
     function borrowAndPoolStrategy(address guy, uint256 totalBase) public {
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
@@ -476,15 +554,6 @@ contract ZeroStateTest is ZeroState {
         vm.prank(guy);
         ladle.batch(batch);
     }
-
-    // Provide liquidity to strategy by buying
-    function testProvideLiquidityToStrategyByBuying() public canSkip {}
-
-    // Remove liquidity from strategy
-    function testRemoveLiquidityFromStrategy() public canSkip {}
-
-    // Remove liquidity from deprecated strategy
-    function testRemoveLiquidityFromDeprecatedStrategy() public canSkip {}
 
     /*//////////////////////////////////////////////////////////////
     /// ETHER
