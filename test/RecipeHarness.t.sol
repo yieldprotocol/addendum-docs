@@ -57,6 +57,9 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
     bool ilkInCauldron; // Skip tests if the ilk is not in the cauldron
     bool matchStrategy; // Skip tests if the series is not the selected for the strategy
 
+    bytes32 constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
     modifier canSkip() {
         if (!ilkEnabled) {
             console.log("Ilk not enabled for series, skipping test");
@@ -189,7 +192,7 @@ contract ZeroStateTest is ZeroState {
         (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
         uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
 
-        // Approve amounts for users
+        // Approve amounts for user
         cash(ilk, user, posted);
         vm.prank(user);
         ilk.approve(address(ilkJoin), posted);
@@ -288,29 +291,151 @@ contract ZeroStateTest is ZeroState {
 
     // Provide liquidity by borrowing
     function testProvideLiquidityByBorrowing() public canSkip {
-
+        borrowAndPool(user, baseUnit);
     }
 
     // Provide liquidity by borrowing, using only underlying
-    function testProvideLiquidityWithUnderlying() public canSkip {}
+    function testProvideLiquidityWithUnderlying() public canSkip {
+        // Get amounts to provide to the pool
+        uint256 poolBaseBalance = pool.getBaseBalance();
+        uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
+        uint256 baseToFYToken = (baseUnit * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
+        uint256 baseToPool = baseUnit - baseToFYToken;
+
+        // Approve amount of base for user
+        cash(base, user, baseToPool + baseToFYToken);
+        vm.prank(user);
+        base.approve(address(ladle), baseToPool + baseToFYToken);
+
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, baseId, 0));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(baseJoin), baseToFYToken));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseToPool));
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, 0, address(pool), baseToFYToken, baseToFYToken));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.mint.selector, user, user, 0, type(uint256).max)
+            )
+        );
+
+        vm.prank(user);
+        ladle.batch(batch);
+
+        assertEq(pool.getBaseBalance(), poolBaseBalance + baseToPool - 1);
+        assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + baseToFYToken);
+    }
 
     // Provide liquidity by buying
-    function testProvideLiquidityByBuying() public canSkip {}
+    function testProvideLiquidityByBuying() public canSkip {
+        uint256 baseWithSlippage = baseUnit;
+        uint256 fyTokenToBuy = baseUnit;
+
+        cash(base, user, baseUnit);
+        vm.prank(user);
+        base.approve(address(ladle), baseUnit);
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseWithSlippage));
+        batch.push(abi.encodeWithSelector(ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.mintWithBase.selector, user, user, fyTokenToBuy, 0, type(uint256).max)));
+
+        vm.prank(user);
+        ladle.batch(batch);
+    }
 
     // Remove liquidity and repay
-    function testRemoveLiquidityAndRepay() public canSkip {}
+    function testRemoveLiquidityAndRepay() public canSkip {
+        borrowAndPool(user, baseUnit);
+    }
 
     // Remove liquidity, repay and sell
-    function testRemoveLiquidityRepaySell() public canSkip {}
+    function testRemoveLiquidityRepaySell() public canSkip {
+        borrowAndPool(user, baseUnit);
+    }
 
     // Remove liquidity and redeem
-    function testRemoveLiquidityAndRedeem() public canSkip {}
+    function testRemoveLiquidityAndRedeem() public canSkip {
+        borrowAndPool(user, baseUnit);
+    }
 
     // Remove liquidity and sell
-    function testRemoveLiquidityAndSell() public canSkip {}
+    function testRemoveLiquidityAndSell() public canSkip {
+        borrowAndPool(user, baseUnit);
+    }
 
     // Roll liquidity before maturity
     function testRollLiquidity() public canSkip {}
+
+    // Helper function for providing liquidity to be used for those tests removing it
+    function borrowAndPool(address guy, uint256 totalBase) public {
+        // Get borrowed amount
+        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
+        uint256 borrowed = debt.min * (10 ** debt.dec);
+        borrowed = borrowed == 0 ? totalBase : borrowed;
+
+        // Get posted amount
+        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
+        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
+        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
+
+        // Approve amount of ilk for user
+        cash(ilk, guy, posted);
+        vm.prank(guy);
+        ilk.approve(address(ilkJoin), posted);
+
+        // Build vault and provide collateral
+        vm.startPrank(guy);
+        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        ladle.pour(vaultId, user, posted.i128(), 0);
+        vm.stopPrank();
+
+        // Get vault's initial balance
+        DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
+
+        // WETH has no DOMAIN_SEPARATOR but this code is how it would work
+        // (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+        //     userPrivateKey,
+        //     keccak256(
+        //         abi.encodePacked(
+        //             "\x19\x01",
+        //             ERC20Permit(address(base)).DOMAIN_SEPARATOR(),
+        //             keccak256(abi.encode(PERMIT_TYPEHASH, user, other, 1e18, 0, block.timestamp))
+        //         )
+        //     )
+        // );
+
+        // Get amounts to provide to the pool
+        uint256 poolBaseBalance = pool.getBaseBalance();
+        uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
+        uint256 fyTokenToPool = (totalBase * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
+        uint256 baseToPool = totalBase - fyTokenToPool;
+
+        // Approve amount of base for user
+        cash(base, guy, totalBase);
+        vm.prank(guy);
+        base.approve(address(ladle), totalBase);
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseToPool));
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, address(pool), 0, fyTokenToPool));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.mint.selector, user, user, 0, type(uint256).max)
+            )
+        );
+
+        vm.prank(guy);
+        ladle.batch(batch);
+
+        // Get vault's final balance
+        DataTypes.Balances memory finalBalances = cauldron.balances(vaultId);
+
+        assertEq(pool.getBaseBalance(), poolBaseBalance + baseToPool - 1); // Better way to account for off by 1?
+        assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool);
+        assertEq(finalBalances.ink, initialBalances.ink);
+        assertEq(finalBalances.art, initialBalances.art + fyTokenToPool); // why does this increase?
+
+    }
 
     /*//////////////////////////////////////////////////////////////
     /// STRATEGIES
@@ -318,18 +443,10 @@ contract ZeroStateTest is ZeroState {
 
     // Provide liquidity to strategy by borrowing
     function testProvideLiquidityToStrategyByBorrowing() public canSkip {
-        borrowAndPool(user, baseUnit);
+        borrowAndPoolStrategy(user, baseUnit);
     }
 
-    function borrowAndPool(address guy, uint256 totalBase) public {
-        // ladle.batch([
-        //   ladle.transfer(base, baseJoin, baseToFYToken),
-        //   ladle.transfer(base, pool, baseToPool),
-        //   ladle.pour(0, pool, baseToFYToken, baseToFYToken),
-        //   ladle.route(pool, ['mint', [strategy, receiver, minRatio, maxRatio]),
-        //   ladle.route(strategy, ['mint', [receiver]),
-        // ])
-
+    function borrowAndPoolStrategy(address guy, uint256 totalBase) public {
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
         uint256 fyTokenToPool = (totalBase * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
