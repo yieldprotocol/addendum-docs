@@ -113,11 +113,6 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
 contract ZeroStateTest is ZeroState {
     using CastU256I128 for uint256;
 
-    modifier afterMaturity() {
-        vm.warp(fyToken.maturity());
-        _;
-    }
-
     /*//////////////////////
     /// VAULT MANAGEMENT ///
     //////////////////////*/
@@ -332,8 +327,9 @@ contract ZeroStateTest is ZeroState {
         ));
     }
 
-    function testCloseLendAfterMaturity() public canSkip afterMaturity {
+    function testCloseLendAfterMaturity() public canSkip {
         _lend(user, baseUnit);
+        _afterMaturity();
 
         vm.startPrank(user);
         fyToken.approve(address(fyToken), fyToken.balanceOf(user));
@@ -344,11 +340,13 @@ contract ZeroStateTest is ZeroState {
 
     // Can this be tested? Should we mock a new pool? 
     // function testRollLendingBeforeMaturity() public canSkip {
-    //     lend(user, baseUnit);
+    //     _lend(user, baseUnit);
     // }
 
-    // function testRollLendingAfterMaturity() public canSkip afterMaturity {
-    //     lend(user, baseUnit);
+    // function testRollLendingAfterMaturity() public canSkip {
+    //     _lend(user, baseUnit);
+    //     _afterMaturity();
+    
     // }
 
     function _lend(address guy, uint256 totalBase) internal {
@@ -374,6 +372,10 @@ contract ZeroStateTest is ZeroState {
 
         assertEq(base.balanceOf(guy),  0);
         assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
+    }
+
+    function _afterMaturity() internal {
+        vm.warp(fyToken.maturity());
     }
 
     /*/////////////////////////
