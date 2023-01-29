@@ -53,9 +53,9 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
 
     bytes[] batch;
 
-    bool ilkEnabled; // Skip tests if the ilk is not enabled for the series
-    bool ilkInCauldron; // Skip tests if the ilk is not in the cauldron
-    bool matchStrategy; // Skip tests if the series is not the selected for the strategy
+    bool ilkEnabled;        // Skip tests if the ilk is not enabled for the series
+    bool ilkInCauldron;     // Skip tests if the ilk is not in the cauldron
+    bool matchStrategy;     // Skip tests if the series is not the selected for the strategy
 
     bytes32 constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
@@ -113,18 +113,21 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
 contract ZeroStateTest is ZeroState {
     using CastU256I128 for uint256;
 
-    /*//////////////////////////////////////////////////////////////
-    /// VAULT MANAGEMENT
-    //////////////////////////////////////////////////////////////*/
+    modifier afterMaturity() {
+        vm.warp(fyToken.maturity());
+        _;
+    }
 
-    // Build a vault
+    /*//////////////////////
+    /// VAULT MANAGEMENT ///
+    //////////////////////*/
+
     function testBuildVault() public canSkip {
         vm.prank(user);
         (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
         assertEq(cauldron.vaults(vaultId).owner, user);
     }
 
-    // Destroy a vault
     function testDestoryVault() public canSkip {
         vm.startPrank(user);
         (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
@@ -134,7 +137,6 @@ contract ZeroStateTest is ZeroState {
         vm.stopPrank();
     }
 
-    // Merge two vaults into one
     function testMergeVaults() public canSkip {
         // Get borrowed amount
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
@@ -180,7 +182,6 @@ contract ZeroStateTest is ZeroState {
         assertEq(mergedBalances.art, artSum);
     }
 
-    // Split a vault into two
     function testSplitVaults() public canSkip {
         // Get borrowed amount
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
@@ -223,11 +224,10 @@ contract ZeroStateTest is ZeroState {
         assertEq(otherNewBalances.art, initialBalances.art / 2);
     }
 
-    /*//////////////////////////////////////////////////////////////
-    /// COLLATERAL AND BORROWING
-    //////////////////////////////////////////////////////////////*/
+    /*//////////////////////////////
+    /// COLLATERAL AND BORROWING ///
+    //////////////////////////////*/
 
-    // Post ERC20 collateral and borrow fyToken
     function testBuildPour() public canSkip {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
@@ -250,7 +250,6 @@ contract ZeroStateTest is ZeroState {
         assertEq(fyToken.balanceOf(other), borrowed);
     }
 
-    // Post ERC20 collateral and borrow underlyiung
     function testBuildServe() public canSkip {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust` but in base, which always will be a bit more than `dust`
@@ -277,7 +276,6 @@ contract ZeroStateTest is ZeroState {
         assertApproxEqAbs(base.balanceOf(other), borrowed, 1); // TODO: Is it ok that we get 1 wei less thna expected?
     }
 
-    // Withdraw ERC20 collateral
     function testWithdrawCollateral() public canSkip {
         // Get borrowed amount
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
@@ -304,57 +302,88 @@ contract ZeroStateTest is ZeroState {
         DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
 
         batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, user, posted.i128() * -1, 0));
-        batch.push(abi.encodeWithSelector(ladle.destroy.selector, vaultId));    // will only succeed if vault has no collateral or debt
+        batch.push(abi.encodeWithSelector(ladle.destroy.selector, vaultId)); // will only succeed if vault has no collateral or debt
 
         vm.prank(user);
         ladle.batch(batch);
     }
 
-    /*//////////////////////////////////////////////////////////////
-    /// DEBT REPAYMENT
-    //////////////////////////////////////////////////////////////*/
+    /*////////////////////
+    /// DEBT REPAYMENT ///
+    ////////////////////*/
 
-    /*//////////////////////////////////////////////////////////////
-    /// LENDING
-    //////////////////////////////////////////////////////////////*/
+    /*/////////////
+    /// LENDING ///
+    /////////////*/
 
-    // Lend
     function testLend() public canSkip {
-        lend(user, baseUnit);
+        _lend(user, baseUnit);
     }
 
-    // Close lending before maturity 
     function testCloseLendBeforeMaturity() public canSkip {
-        lend(user, baseUnit);
+        _lend(user, baseUnit);
+
+        // Why does the fyToken balance of user not change after this?
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, address(pool), baseUnit));
+        batch.push(abi.encodeWithSelector(
+            ladle.route.selector, 
+            address(pool),
+            abi.encodeWithSelector(IPool.sellFYToken.selector, user, 0)
+        ));
     }
 
-    // Close lending after maturity
-    function testCloseLendAfterMaturity() public canSkip {
-        lend(user, baseUnit);
+    function testCloseLendAfterMaturity() public canSkip afterMaturity {
+        _lend(user, baseUnit);
+
+        vm.startPrank(user);
+        fyToken.approve(address(fyToken), fyToken.balanceOf(user));
+        // fyToken.redeem(user, fyToken.balanceOf(user));
+        fyToken.redeem(fyToken.balanceOf(user), user, user);
+        vm.stopPrank();
     }
 
-    // Roll lending before maturity
-    function testRollLendingBeforeMaturity() public canSkip {
-        lend(user, baseUnit);
+    // Can this be tested? Should we mock a new pool? 
+    // function testRollLendingBeforeMaturity() public canSkip {
+    //     lend(user, baseUnit);
+    // }
+
+    // function testRollLendingAfterMaturity() public canSkip afterMaturity {
+    //     lend(user, baseUnit);
+    // }
+
+    function _lend(address guy, uint256 totalBase) internal {
+        uint256 baseSold = totalBase;
+
+        cash(base, guy, baseSold);
+        vm.prank(guy);
+        base.approve(address(ladle), baseSold);
+
+        uint256 poolBaseBalance = pool.getBaseBalance();
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseSold));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.sellBase.selector, guy, 0)
+            )
+        );
+
+        vm.prank(guy);
+        ladle.batch(batch);
+
+        assertEq(base.balanceOf(guy),  0);
+        assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
     }
 
-    // Roll lending after maturity
-    function testRollLendingAfterMaturity() public canSkip {
-        lend(user, baseUnit);
-    }
+    /*/////////////////////////
+    /// LIQUIDITY PROVIDING ///
+    /////////////////////////*/
 
-    function lend(address guy, uint256 totalBase);
-
-    /*//////////////////////////////////////////////////////////////
-    /// LIQUIDITY PROVIDING
-    //////////////////////////////////////////////////////////////*/
-
-    // Provide liquidity by borrowing
     function testProvideLiquidityByBorrowing() public canSkip {
-        borrowAndPool(user, baseUnit);
+        _borrowAndPool(user, baseUnit);
     }
 
-    // Provide liquidity by borrowing, using only underlying
     function testProvideLiquidityWithUnderlying() public canSkip {
         // Get amounts to provide to the pool
         uint256 poolBaseBalance = pool.getBaseBalance();
@@ -386,52 +415,51 @@ contract ZeroStateTest is ZeroState {
         assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + baseToFYToken);
     }
 
-    // Provide liquidity by buying
     function testProvideLiquidityByBuying() public canSkip {
-        uint256 baseWithSlippage = baseUnit;
+        uint256 baseWithSlippage = baseUnit * 4;    // Better way to do this so it doesn't revert with NotEnoughBaseIn?
         uint256 fyTokenToBuy = baseUnit;
 
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
         uint256 fyTokenToPool = (baseUnit * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
-                                // (1 * 50.89) / (148.28 * 50.89) 
+        // (1 * 50.89) / (148.28 * 50.89)
 
-        cash(base, user, baseUnit);
+        cash(base, user, baseUnit * 4);
         vm.prank(user);
-        base.approve(address(ladle), baseUnit);
+        base.approve(address(ladle), baseUnit * 4);
 
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseWithSlippage));
-        batch.push(abi.encodeWithSelector(ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.mintWithBase.selector, user, user, fyTokenToBuy, 0, type(uint256).max)));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.mintWithBase.selector, user, user, fyTokenToBuy, 0, type(uint256).max)
+            )
+        );
 
         vm.prank(user);
         ladle.batch(batch);
     }
 
-    // Remove liquidity and repay
     function testRemoveLiquidityAndRepay() public canSkip {
-        borrowAndPool(user, baseUnit);
+        _borrowAndPool(user, baseUnit);
     }
 
-    // Remove liquidity, repay and sell
-    function testRemoveLiquidityRepaySell() public canSkip {
-        borrowAndPool(user, baseUnit);
+    function testRemoveLiquidityRepayAndSell() public canSkip {
+        _borrowAndPool(user, baseUnit);
     }
 
-    // Remove liquidity and redeem
     function testRemoveLiquidityAndRedeem() public canSkip {
-        borrowAndPool(user, baseUnit);
+        _borrowAndPool(user, baseUnit);
     }
 
-    // Remove liquidity and sell
     function testRemoveLiquidityAndSell() public canSkip {
-        borrowAndPool(user, baseUnit);
+        _borrowAndPool(user, baseUnit);
     }
 
-    // Roll liquidity before maturity
     function testRollLiquidity() public canSkip {}
 
-    // Helper function for providing liquidity to be used for those tests removing it
-    function borrowAndPool(address guy, uint256 totalBase) public {
+    function _borrowAndPool(address guy, uint256 totalBase) internal {
         // Get borrowed amount
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec);
@@ -499,32 +527,27 @@ contract ZeroStateTest is ZeroState {
         assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool);
         assertEq(finalBalances.ink, initialBalances.ink);
         assertEq(finalBalances.art, initialBalances.art + fyTokenToPool); // why does this increase?
-
     }
 
-    /*//////////////////////////////////////////////////////////////
-    /// STRATEGIES
-    //////////////////////////////////////////////////////////////*/
+    /*////////////////
+    /// STRATEGIES ///
+    ////////////////*/
 
-    // Provide liquidity to strategy by borrowing
     function testProvideLiquidityToStrategyByBorrowing() public canSkip {
-        borrowAndPoolStrategy(user, baseUnit);
+        _borrowAndPoolStrategy(user, baseUnit);
     }
 
-    // Provide liquidity to strategy by buying
     function testProvideLiquidityToStrategyByBuying() public canSkip {}
 
-    // Remove liquidity from strategy
     function testRemoveLiquidityFromStrategy() public canSkip {
-        borrowAndPoolStrategy(user, baseUnit);
+        _borrowAndPoolStrategy(user, baseUnit);
     }
 
-    // Remove liquidity from deprecated strategy
     function testRemoveLiquidityFromDeprecatedStrategy() public canSkip {
-        borrowAndPoolStrategy(user, baseUnit);
+        _borrowAndPoolStrategy(user, baseUnit);
     }
 
-    function borrowAndPoolStrategy(address guy, uint256 totalBase) public {
+    function _borrowAndPoolStrategy(address guy, uint256 totalBase) internal {
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
         uint256 fyTokenToPool = (totalBase * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
@@ -555,15 +578,12 @@ contract ZeroStateTest is ZeroState {
         ladle.batch(batch);
     }
 
-    /*//////////////////////////////////////////////////////////////
-    /// ETHER
-    //////////////////////////////////////////////////////////////*/
+    /*///////////
+    /// ETHER ///
+    ///////////*/
 
-    /*//////////////////////////////////////////////////////////////
-    /// ERC1155
-    //////////////////////////////////////////////////////////////*/
+    /*/////////////
+    /// ERC1155 ///
+    /////////////*/
 }
 
-abstract contract WithStrategyTokens is ZeroState {
-    function setUp() public override {}
-}

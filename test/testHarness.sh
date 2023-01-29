@@ -77,6 +77,6 @@ for SERIES_STRATEGY in ${SERIES_STRATEGIES[@]}; do
   echo "Strategy: " $STRATEGY_
   for ILK_ID_ in ${ILK_IDS[@]}; do
     echo "IlkId:    " $ILK_ID_
-    STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -c test/RecipeHarness.t.sol -m testWithdrawCollateral -vvvv
+    STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -c test/RecipeHarness.t.sol -m testProvideLiquidityByBuying -vvvv
   done
 done
