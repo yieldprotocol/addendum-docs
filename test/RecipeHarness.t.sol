@@ -3,22 +3,26 @@ pragma solidity >=0.8.13;
 
 import "lib/forge-std/src/Test.sol";
 import "lib/forge-std/src/console2.sol";
-import "lib/vault-v2/packages/foundry/contracts/interfaces/DataTypes.sol";
-// import { IERC20 } from "lib/yield-utils-v2/contracts/token/IERC20.sol";
-import {IERC2612} from "lib/yield-utils-v2/contracts/token/IERC2612.sol";
-import {ERC20Permit} from "lib/yield-utils-v2/contracts/token/ERC20Permit.sol";
-import {IERC20Metadata} from "lib/yield-utils-v2/contracts/token/IERC20Metadata.sol";
-import {ICauldron} from "lib/vault-v2/packages/foundry/contracts/interfaces/ICauldron.sol";
-import {ILadle} from "lib/vault-v2/packages/foundry/contracts/interfaces/ILadle.sol";
-import {IFYToken} from "lib/vault-v2/packages/foundry/contracts/interfaces/IFYToken.sol";
-import {IPool} from "lib/yieldspace-tv/src/interfaces/IPool.sol";
-import {IStrategy} from "lib/strategy-v2/contracts/interfaces/IStrategy.sol";
-import {CastBytes32Bytes6} from "lib/yield-utils-v2/contracts/cast/CastBytes32Bytes6.sol";
-import {CastU256I128} from "lib/yield-utils-v2/contracts/cast/CastU256I128.sol";
-import {TestConstants} from "./TestConstants.sol";
-import {TestExtensions} from "./TestExtensions.sol";
 
-import {Strategy} from "lib/strategy-v2/contracts/Strategy.sol";
+import {CastBytes32Bytes6}      from "lib/yield-utils-v2/contracts/cast/CastBytes32Bytes6.sol";
+import {CastU256I128}           from "lib/yield-utils-v2/contracts/cast/CastU256I128.sol";
+import {DataTypes}              from "lib/vault-v2/packages/foundry/contracts/interfaces/DataTypes.sol";
+
+import {IERC20}                 from "lib/yield-utils-v2/contracts/token/IERC20.sol";
+import {IERC20Metadata}         from "lib/yield-utils-v2/contracts/token/IERC20Metadata.sol";
+import {IERC2612}               from "lib/yield-utils-v2/contracts/token/IERC2612.sol";
+import {ERC20Permit}            from "lib/yield-utils-v2/contracts/token/ERC20Permit.sol";
+
+import {ICauldron}              from "lib/vault-v2/packages/foundry/contracts/interfaces/ICauldron.sol";
+import {IFYToken}               from "lib/vault-v2/packages/foundry/contracts/interfaces/IFYToken.sol";
+import {IJOIN}                  from "lib/vault-v2/packages/foundry/contracts/interfaces/IJoin.sol";
+import {ILadle}                 from "lib/vault-v2/packages/foundry/contracts/interfaces/ILadle.sol";
+import {RepayFromLadleModule}   from "lib/vault-v2/packages/foundry/contracts/modules/RepayFromLadleModule.sol";
+import {IPool}                  from "lib/yieldspace-tv/src/interfaces/IPool.sol";
+import {IStrategy}              from "lib/strategy-v2/contracts/interfaces/IStrategy.sol";
+
+import {TestConstants}          from "./TestConstants.sol";
+import {TestExtensions}         from "./TestExtensions.sol";
 
 /// @dev This test harness tests that basic functions on the Ladle are functional.
 
@@ -28,6 +32,7 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
 
     ICauldron cauldron;
     ILadle ladle;
+    RepayFromLadleModule repayFromLadleModule;
 
     uint256 userPrivateKey = 0xBABE;
     address user = vm.addr(userPrivateKey);
@@ -53,9 +58,9 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
 
     bytes[] batch;
 
-    bool ilkEnabled;        // Skip tests if the ilk is not enabled for the series
-    bool ilkInCauldron;     // Skip tests if the ilk is not in the cauldron
-    bool matchStrategy;     // Skip tests if the series is not the selected for the strategy
+    bool ilkEnabled; // Skip tests if the ilk is not enabled for the series
+    bool ilkInCauldron; // Skip tests if the ilk is not in the cauldron
+    bool matchStrategy; // Skip tests if the series is not the selected for the strategy
 
     bytes32 constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
@@ -79,8 +84,11 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         string memory network = vm.envOr(NETWORK, MAINNET);
 
         cauldron = ICauldron(addresses[network][CAULDRON]);
+        vm.label(address(cauldron), "cauldron");
         ladle = ILadle(addresses[network][LADLE]);
         vm.label(address(ladle), "ladle");
+        repayFromLadleModule = RepayFromLadleModule(0xd47a7473C83a1cC145407e82Def5Ae15F8b338c2);
+        vm.label(address(repayFromLadleModule), "repayFromLadleModule");
 
         strategy = IStrategy(vm.envAddress(STRATEGY));
         seriesId = vm.envOr(SERIES_ID, bytes32(0)).b6();
@@ -92,13 +100,17 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
 
         if (ilkInCauldron && ilkEnabled) {
             fyToken = IFYToken(cauldron.series(seriesId).fyToken);
+            vm.label(address(fyToken), "fyToken");
             ilk = IERC20(cauldron.assets(ilkId));
+            vm.label(address(ilk), "ilk");
             base = IERC20(cauldron.assets(baseId));
+            vm.label(address(base), "base");
             ilkJoin = IJoin(ladle.joins(ilkId));
             vm.label(address(ilkJoin), "ilkJoin");
             baseJoin = IJoin(ladle.joins(baseId));
             vm.label(address(baseJoin), "baseJoin");
             pool = IPool(ladle.pools(seriesId));
+            vm.label(address(pool), "pool");
 
             fyTokenUnit = 10 ** IERC20Metadata(address(fyToken)).decimals();
             ilkUnit = 10 ** IERC20Metadata(address(ilk)).decimals();
@@ -320,11 +332,11 @@ contract ZeroStateTest is ZeroState {
 
         // Why does the fyToken balance of user not change after this?
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, address(pool), baseUnit));
-        batch.push(abi.encodeWithSelector(
-            ladle.route.selector, 
-            address(pool),
-            abi.encodeWithSelector(IPool.sellFYToken.selector, user, 0)
-        ));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellFYToken.selector, user, 0)
+            )
+        );
     }
 
     function testCloseLendAfterMaturity() public canSkip {
@@ -338,7 +350,7 @@ contract ZeroStateTest is ZeroState {
         vm.stopPrank();
     }
 
-    // Can this be tested? Should we mock a new pool? 
+    // Can this be tested? Should we mock a new pool?
     // function testRollLendingBeforeMaturity() public canSkip {
     //     _lend(user, baseUnit);
     // }
@@ -346,7 +358,6 @@ contract ZeroStateTest is ZeroState {
     // function testRollLendingAfterMaturity() public canSkip {
     //     _lend(user, baseUnit);
     //     _afterMaturity();
-    
     // }
 
     function _lend(address guy, uint256 totalBase) internal {
@@ -361,16 +372,14 @@ contract ZeroStateTest is ZeroState {
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseSold));
         batch.push(
             abi.encodeWithSelector(
-                ladle.route.selector,
-                address(pool),
-                abi.encodeWithSelector(IPool.sellBase.selector, guy, 0)
+                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, guy, 0)
             )
         );
 
         vm.prank(guy);
         ladle.batch(batch);
 
-        assertEq(base.balanceOf(guy),  0);
+        assertEq(base.balanceOf(guy), 0);
         assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
     }
 
@@ -418,7 +427,7 @@ contract ZeroStateTest is ZeroState {
     }
 
     function testProvideLiquidityByBuying() public canSkip {
-        uint256 baseWithSlippage = baseUnit * 4;    // Better way to do this so it doesn't revert with NotEnoughBaseIn?
+        uint256 baseWithSlippage = baseUnit * 4; // Better way to do this so it doesn't revert with NotEnoughBaseIn?
         uint256 fyTokenToBuy = baseUnit;
 
         uint256 poolBaseBalance = pool.getBaseBalance();
@@ -444,24 +453,109 @@ contract ZeroStateTest is ZeroState {
     }
 
     function testRemoveLiquidityAndRepay() public canSkip {
-        _borrowAndPool(user, baseUnit);
+        bytes12 vaultId = _borrowAndPool(user, baseUnit);
+        uint256 lpTokensBurnt = pool.balanceOf(user);
+
+        // not sure why this one fails
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.burn.selector, user, address(ladle), 0, type(uint256).max)
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.moduleCall.selector,
+                address(repayFromLadleModule),
+                abi.encodeWithSelector(repayFromLadleModule.repayFromLadle.selector, vaultId, user, user)
+            )
+        );
+
+        vm.startPrank(user);
+        base.approve(address(ladle), lpTokensBurnt);
+        ladle.batch(batch);
+        vm.stopPrank();
     }
 
     function testRemoveLiquidityRepayAndSell() public canSkip {
-        _borrowAndPool(user, baseUnit);
+        bytes12 vaultId = _borrowAndPool(user, baseUnit);
+        uint256 lpTokensBurnt = pool.balanceOf(user);
+
+        // not sure why this one fails
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.burn.selector, user, address(ladle), 0, 0)
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.moduleCall.selector,
+                address(repayFromLadleModule),
+                abi.encodeWithSelector(repayFromLadleModule.repayFromLadle.selector, vaultId, user, address(pool))
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellFYToken.selector, user, 0)
+            )
+        );
+
+        vm.startPrank(user);
+        base.approve(address(ladle), lpTokensBurnt);
+        ladle.batch(batch);
+        vm.stopPrank();
     }
 
     function testRemoveLiquidityAndRedeem() public canSkip {
-        _borrowAndPool(user, baseUnit);
+        bytes12 vaultId = _borrowAndPool(user, baseUnit);
+        uint256 lpTokensBurnt = pool.balanceOf(user);
+
+        // not sure why this one fails
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.burn.selector, user, address(fyToken), 0, type(uint256).max)
+            )
+        );
+        batch.push(abi.encodeWithSelector(ladle.redeem.selector, seriesId, user, 0));
+
+        vm.startPrank(user);
+        base.approve(address(ladle), lpTokensBurnt);
+        ladle.batch(batch);
+        vm.stopPrank();
     }
 
     function testRemoveLiquidityAndSell() public canSkip {
-        _borrowAndPool(user, baseUnit);
+        bytes12 vaultId = _borrowAndPool(user, baseUnit);
+        uint256 lpTokensBurnt = pool.balanceOf(user);
+
+        // not sure why this one fails
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.burnForBase.selector, user, 0, type(uint256).max)
+            )
+        );
+
+        vm.startPrank(user);
+        base.approve(address(ladle), lpTokensBurnt);
+        ladle.batch(batch);
+        vm.stopPrank();
     }
 
-    function testRollLiquidity() public canSkip {}
+    // Can this be tested? Should we mock a new pool?
+    // function testRollLiquidity() public canSkip {}
 
-    function _borrowAndPool(address guy, uint256 totalBase) internal {
+    function _borrowAndPool(address guy, uint256 totalBase) internal returns (bytes12 vaultId) {
         // Get borrowed amount
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec);
@@ -529,6 +623,8 @@ contract ZeroStateTest is ZeroState {
         assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool);
         assertEq(finalBalances.ink, initialBalances.ink);
         assertEq(finalBalances.art, initialBalances.art + fyTokenToPool); // why does this increase?
+
+        return vaultId;
     }
 
     /*////////////////
@@ -588,4 +684,3 @@ contract ZeroStateTest is ZeroState {
     /// ERC1155 ///
     /////////////*/
 }
-
