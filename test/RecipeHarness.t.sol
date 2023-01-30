@@ -15,7 +15,7 @@ import {ERC20Permit}            from "lib/yield-utils-v2/contracts/token/ERC20Pe
 
 import {ICauldron}              from "lib/vault-v2/packages/foundry/contracts/interfaces/ICauldron.sol";
 import {IFYToken}               from "lib/vault-v2/packages/foundry/contracts/interfaces/IFYToken.sol";
-import {IJOIN}                  from "lib/vault-v2/packages/foundry/contracts/interfaces/IJoin.sol";
+import {IJoin}                  from "lib/vault-v2/packages/foundry/contracts/interfaces/IJoin.sol";
 import {ILadle}                 from "lib/vault-v2/packages/foundry/contracts/interfaces/ILadle.sol";
 import {RepayFromLadleModule}   from "lib/vault-v2/packages/foundry/contracts/modules/RepayFromLadleModule.sol";
 import {IPool}                  from "lib/yieldspace-tv/src/interfaces/IPool.sol";
@@ -23,6 +23,8 @@ import {IStrategy}              from "lib/strategy-v2/contracts/interfaces/IStra
 
 import {TestConstants}          from "./TestConstants.sol";
 import {TestExtensions}         from "./TestExtensions.sol";
+
+using CastU256I128 for uint256;
 
 /// @dev This test harness tests that basic functions on the Ladle are functional.
 
@@ -120,10 +122,118 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
             matchStrategy = (address(strategy.fyToken()) == address(fyToken));
         }
     }
+
+    /*//////////////////////
+    /// HELPER FUNCTIONS ///
+    //////////////////////*/
+
+    function clearBatch(uint256 length) internal {
+        for (uint256 i = 0; i < length; i++) {
+            batch.pop();
+        }
+    }
+
+    function afterMaturity() internal {
+        vm.warp(fyToken.maturity());
+    }
+
+    function lend(address guy, uint256 totalBase) internal {
+        uint256 baseSold = totalBase;
+
+        cash(base, guy, baseSold);
+        vm.prank(guy);
+        base.approve(address(ladle), baseSold);
+
+        uint256 poolBaseBalance = pool.getBaseBalance();
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseSold));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, guy, 0)
+            )
+        );
+
+        vm.prank(guy);
+        ladle.batch(batch);
+
+        assertEq(base.balanceOf(guy), 0);
+        assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
+    }
+
+    function borrowAndPool(address guy, uint256 totalBase) internal returns (bytes12 vaultId) {
+        // Get borrowed amount
+        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
+        uint256 borrowed = debt.min * (10 ** debt.dec);
+        borrowed = borrowed == 0 ? totalBase : borrowed;
+
+        // Get posted amount
+        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
+        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
+        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
+
+        // Approve amount of ilk for user
+        cash(ilk, guy, posted);
+        vm.prank(guy);
+        ilk.approve(address(ilkJoin), posted);
+
+        // Build vault and provide collateral
+        vm.startPrank(guy);
+        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        ladle.pour(vaultId, user, posted.i128(), 0);
+        vm.stopPrank();
+
+        // Get vault's initial balance
+        DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
+
+        // WETH has no DOMAIN_SEPARATOR but this code is how it would work
+        // (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+        //     userPrivateKey,
+        //     keccak256(
+        //         abi.encodePacked(
+        //             "\x19\x01",
+        //             ERC20Permit(address(base)).DOMAIN_SEPARATOR(),
+        //             keccak256(abi.encode(PERMIT_TYPEHASH, user, other, 1e18, 0, block.timestamp))
+        //         )
+        //     )
+        // );
+
+        // Get amounts to provide to the pool
+        uint256 poolBaseBalance = pool.getBaseBalance();
+        uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
+        uint256 fyTokenToPool = (totalBase * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
+        uint256 baseToPool = totalBase - fyTokenToPool;
+
+        // Approve amount of base for user
+        cash(base, guy, totalBase);
+        vm.prank(guy);
+        base.approve(address(ladle), totalBase);
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseToPool));
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, address(pool), 0, fyTokenToPool));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.mint.selector, user, user, 0, type(uint256).max)
+            )
+        );
+
+        vm.prank(guy);
+        ladle.batch(batch);
+
+        // Get vault's final balance
+        DataTypes.Balances memory finalBalances = cauldron.balances(vaultId);
+
+        assertEq(pool.getBaseBalance(), poolBaseBalance + baseToPool - 1); // Better way to account for off by 1?
+        assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool);
+        assertEq(finalBalances.ink, initialBalances.ink);
+        assertEq(finalBalances.art, initialBalances.art + fyTokenToPool); // why does this increase?
+
+        return vaultId;
+    }
 }
 
 contract ZeroStateTest is ZeroState {
-    using CastU256I128 for uint256;
 
     /*//////////////////////
     /// VAULT MANAGEMENT ///
@@ -135,7 +245,7 @@ contract ZeroStateTest is ZeroState {
         assertEq(cauldron.vaults(vaultId).owner, user);
     }
 
-    function testDestoryVault() public canSkip {
+    function testDestroyVault() public canSkip {
         vm.startPrank(user);
         (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
         assertEq(cauldron.vaults(vaultId).owner, user);
@@ -235,7 +345,7 @@ contract ZeroStateTest is ZeroState {
     /// COLLATERAL AND BORROWING ///
     //////////////////////////////*/
 
-    function testBuildPour() public canSkip {
+    function testBorrowFYToken() public canSkip {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
         borrowed = borrowed == 0 ? baseUnit : borrowed; // If dust is 0 (ETH/ETH), we borrow 1 base unit
@@ -257,7 +367,7 @@ contract ZeroStateTest is ZeroState {
         assertEq(fyToken.balanceOf(other), borrowed);
     }
 
-    function testBuildServe() public canSkip {
+    function testBorrowUnderlying() public canSkip {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust` but in base, which always will be a bit more than `dust`
         borrowed = borrowed == 0 ? baseUnit : borrowed; // If dust is 0 (ETH/ETH), we borrow 1 base unit
@@ -324,11 +434,11 @@ contract ZeroStateTest is ZeroState {
     /////////////*/
 
     function testLend() public canSkip {
-        _lend(user, baseUnit);
+        lend(user, baseUnit);
     }
 
     function testCloseLendBeforeMaturity() public canSkip {
-        _lend(user, baseUnit);
+        lend(user, baseUnit);
 
         // Why does the fyToken balance of user not change after this?
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, address(pool), baseUnit));
@@ -340,8 +450,8 @@ contract ZeroStateTest is ZeroState {
     }
 
     function testCloseLendAfterMaturity() public canSkip {
-        _lend(user, baseUnit);
-        _afterMaturity();
+        lend(user, baseUnit);
+        afterMaturity();
 
         vm.startPrank(user);
         fyToken.approve(address(fyToken), fyToken.balanceOf(user));
@@ -350,41 +460,13 @@ contract ZeroStateTest is ZeroState {
         vm.stopPrank();
     }
 
-    // Can this be tested? Should we mock a new pool?
-    // function testRollLendingBeforeMaturity() public canSkip {
-    //     _lend(user, baseUnit);
-    // }
-
-    // function testRollLendingAfterMaturity() public canSkip {
-    //     _lend(user, baseUnit);
-    //     _afterMaturity();
-    // }
-
-    function _lend(address guy, uint256 totalBase) internal {
-        uint256 baseSold = totalBase;
-
-        cash(base, guy, baseSold);
-        vm.prank(guy);
-        base.approve(address(ladle), baseSold);
-
-        uint256 poolBaseBalance = pool.getBaseBalance();
-
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseSold));
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, guy, 0)
-            )
-        );
-
-        vm.prank(guy);
-        ladle.batch(batch);
-
-        assertEq(base.balanceOf(guy), 0);
-        assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
+    function testRollLendingBeforeMaturity() public canSkip {
+        lend(user, baseUnit);
     }
 
-    function _afterMaturity() internal {
-        vm.warp(fyToken.maturity());
+    function testRollLendingAfterMaturity() public canSkip {
+        lend(user, baseUnit);
+        afterMaturity();
     }
 
     /*/////////////////////////
@@ -392,7 +474,7 @@ contract ZeroStateTest is ZeroState {
     /////////////////////////*/
 
     function testProvideLiquidityByBorrowing() public canSkip {
-        _borrowAndPool(user, baseUnit);
+        borrowAndPool(user, baseUnit);
     }
 
     function testProvideLiquidityWithUnderlying() public canSkip {
@@ -453,10 +535,11 @@ contract ZeroStateTest is ZeroState {
     }
 
     function testRemoveLiquidityAndRepay() public canSkip {
-        bytes12 vaultId = _borrowAndPool(user, baseUnit);
+        bytes12 vaultId = borrowAndPool(user, baseUnit);
         uint256 lpTokensBurnt = pool.balanceOf(user);
 
-        // not sure why this one fails
+        clearBatch(batch.length);
+
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
             abi.encodeWithSelector(
@@ -474,22 +557,23 @@ contract ZeroStateTest is ZeroState {
         );
 
         vm.startPrank(user);
-        base.approve(address(ladle), lpTokensBurnt);
+        pool.approve(address(ladle), lpTokensBurnt);
         ladle.batch(batch);
         vm.stopPrank();
     }
 
     function testRemoveLiquidityRepayAndSell() public canSkip {
-        bytes12 vaultId = _borrowAndPool(user, baseUnit);
+        bytes12 vaultId = borrowAndPool(user, baseUnit);
         uint256 lpTokensBurnt = pool.balanceOf(user);
 
-        // not sure why this one fails
+        clearBatch(batch.length);
+
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
             abi.encodeWithSelector(
                 ladle.route.selector,
                 address(pool),
-                abi.encodeWithSelector(IPool.burn.selector, user, address(ladle), 0, 0)
+                abi.encodeWithSelector(IPool.burn.selector, user, address(ladle), 0, type(uint256).max)
             )
         );
         batch.push(
@@ -506,16 +590,18 @@ contract ZeroStateTest is ZeroState {
         );
 
         vm.startPrank(user);
-        base.approve(address(ladle), lpTokensBurnt);
+        pool.approve(address(ladle), lpTokensBurnt);
         ladle.batch(batch);
         vm.stopPrank();
     }
 
     function testRemoveLiquidityAndRedeem() public canSkip {
-        bytes12 vaultId = _borrowAndPool(user, baseUnit);
+        bytes12 vaultId = borrowAndPool(user, baseUnit);
         uint256 lpTokensBurnt = pool.balanceOf(user);
 
-        // not sure why this one fails
+        clearBatch(batch.length);
+        afterMaturity();
+
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
             abi.encodeWithSelector(
@@ -527,16 +613,17 @@ contract ZeroStateTest is ZeroState {
         batch.push(abi.encodeWithSelector(ladle.redeem.selector, seriesId, user, 0));
 
         vm.startPrank(user);
-        base.approve(address(ladle), lpTokensBurnt);
+        pool.approve(address(ladle), lpTokensBurnt);
         ladle.batch(batch);
         vm.stopPrank();
     }
 
     function testRemoveLiquidityAndSell() public canSkip {
-        bytes12 vaultId = _borrowAndPool(user, baseUnit);
+        bytes12 vaultId = borrowAndPool(user, baseUnit);
         uint256 lpTokensBurnt = pool.balanceOf(user);
 
-        // not sure why this one fails
+        clearBatch(batch.length);
+
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
             abi.encodeWithSelector(
@@ -547,85 +634,12 @@ contract ZeroStateTest is ZeroState {
         );
 
         vm.startPrank(user);
-        base.approve(address(ladle), lpTokensBurnt);
+        pool.approve(address(ladle), lpTokensBurnt);
         ladle.batch(batch);
         vm.stopPrank();
     }
 
-    // Can this be tested? Should we mock a new pool?
-    // function testRollLiquidity() public canSkip {}
-
-    function _borrowAndPool(address guy, uint256 totalBase) internal returns (bytes12 vaultId) {
-        // Get borrowed amount
-        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10 ** debt.dec);
-        borrowed = borrowed == 0 ? totalBase : borrowed;
-
-        // Get posted amount
-        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
-        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
-        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
-
-        // Approve amount of ilk for user
-        cash(ilk, guy, posted);
-        vm.prank(guy);
-        ilk.approve(address(ilkJoin), posted);
-
-        // Build vault and provide collateral
-        vm.startPrank(guy);
-        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
-        ladle.pour(vaultId, user, posted.i128(), 0);
-        vm.stopPrank();
-
-        // Get vault's initial balance
-        DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
-
-        // WETH has no DOMAIN_SEPARATOR but this code is how it would work
-        // (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-        //     userPrivateKey,
-        //     keccak256(
-        //         abi.encodePacked(
-        //             "\x19\x01",
-        //             ERC20Permit(address(base)).DOMAIN_SEPARATOR(),
-        //             keccak256(abi.encode(PERMIT_TYPEHASH, user, other, 1e18, 0, block.timestamp))
-        //         )
-        //     )
-        // );
-
-        // Get amounts to provide to the pool
-        uint256 poolBaseBalance = pool.getBaseBalance();
-        uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
-        uint256 fyTokenToPool = (totalBase * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
-        uint256 baseToPool = totalBase - fyTokenToPool;
-
-        // Approve amount of base for user
-        cash(base, guy, totalBase);
-        vm.prank(guy);
-        base.approve(address(ladle), totalBase);
-
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseToPool));
-        batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, address(pool), 0, fyTokenToPool));
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector,
-                address(pool),
-                abi.encodeWithSelector(IPool.mint.selector, user, user, 0, type(uint256).max)
-            )
-        );
-
-        vm.prank(guy);
-        ladle.batch(batch);
-
-        // Get vault's final balance
-        DataTypes.Balances memory finalBalances = cauldron.balances(vaultId);
-
-        assertEq(pool.getBaseBalance(), poolBaseBalance + baseToPool - 1); // Better way to account for off by 1?
-        assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool);
-        assertEq(finalBalances.ink, initialBalances.ink);
-        assertEq(finalBalances.art, initialBalances.art + fyTokenToPool); // why does this increase?
-
-        return vaultId;
-    }
+    function testRollLiquidity() public canSkip {}
 
     /*////////////////
     /// STRATEGIES ///
