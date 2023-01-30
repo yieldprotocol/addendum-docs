@@ -6,6 +6,7 @@ import "lib/forge-std/src/console2.sol";
 
 import {CastBytes32Bytes6}      from "lib/yield-utils-v2/contracts/cast/CastBytes32Bytes6.sol";
 import {CastU256I128}           from "lib/yield-utils-v2/contracts/cast/CastU256I128.sol";
+import {CastU256U128}           from "lib/yield-utils-v2/contracts/cast/CastU256U128.sol";
 import {DataTypes}              from "lib/vault-v2/packages/foundry/contracts/interfaces/DataTypes.sol";
 
 import {IERC20}                 from "lib/yield-utils-v2/contracts/token/IERC20.sol";
@@ -24,14 +25,14 @@ import {IStrategy}              from "lib/strategy-v2/contracts/interfaces/IStra
 import {TestConstants}          from "./TestConstants.sol";
 import {TestExtensions}         from "./TestExtensions.sol";
 
+using stdStorage for StdStorage;
+using CastBytes32Bytes6 for bytes32;
 using CastU256I128 for uint256;
+using CastU256U128 for uint256;
 
 /// @dev This test harness tests that basic functions on the Ladle are functional.
 
 abstract contract ZeroState is Test, TestConstants, TestExtensions {
-    using stdStorage for StdStorage;
-    using CastBytes32Bytes6 for bytes32;
-
     ICauldron cauldron;
     ILadle ladle;
     RepayFromLadleModule repayFromLadleModule;
@@ -127,17 +128,17 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
     /// HELPER FUNCTIONS ///
     //////////////////////*/
 
-    function clearBatch(uint256 length) internal {
+    function _clearBatch(uint256 length) internal {
         for (uint256 i = 0; i < length; i++) {
             batch.pop();
         }
     }
 
-    function afterMaturity() internal {
+    function _afterMaturity() internal {
         vm.warp(fyToken.maturity());
     }
 
-    function lend(address guy, uint256 totalBase) internal {
+    function _lend(address guy, uint256 totalBase) internal {
         uint256 baseSold = totalBase;
 
         cash(base, guy, baseSold);
@@ -160,7 +161,16 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
     }
 
-    function borrowAndPool(address guy, uint256 totalBase) internal returns (bytes12 vaultId) {
+    function _buildVault(address guy, uint256 ilkAmount, uint256 baseAmount) internal returns (bytes12 vaultId) {
+        vm.startPrank(guy);
+        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        ladle.pour(vaultId, user, ilkAmount.i128(), baseAmount.i128());
+        vm.stopPrank();
+
+        return vaultId;
+    }
+
+    function _borrowAndPool(address guy, uint256 totalBase) internal returns (bytes12 vaultId) {
         // Get borrowed amount
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
         uint256 borrowed = debt.min * (10 ** debt.dec);
@@ -176,12 +186,9 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         vm.prank(guy);
         ilk.approve(address(ilkJoin), posted);
 
-        // Build vault and provide collateral
-        vm.startPrank(guy);
-        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
-        ladle.pour(vaultId, user, posted.i128(), 0);
-        vm.stopPrank();
-
+        // Build vault
+        bytes12 vaultId = _buildVault(guy, posted, 0);
+        
         // Get vault's initial balance
         DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
 
@@ -224,10 +231,10 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         // Get vault's final balance
         DataTypes.Balances memory finalBalances = cauldron.balances(vaultId);
 
-        assertEq(pool.getBaseBalance(), poolBaseBalance + baseToPool - 1); // Better way to account for off by 1?
+        assertApproxEqAbs(pool.getBaseBalance(), poolBaseBalance + baseToPool, 1); // off-by-1 error
         assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool);
         assertEq(finalBalances.ink, initialBalances.ink);
-        assertEq(finalBalances.art, initialBalances.art + fyTokenToPool); // why does this increase?
+        assertEq(finalBalances.art, initialBalances.art + fyTokenToPool);
 
         return vaultId;
     }
@@ -240,18 +247,18 @@ contract ZeroStateTest is ZeroState {
     //////////////////////*/
 
     function testBuildVault() public canSkip {
-        vm.prank(user);
-        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        bytes12 vaultId = _buildVault(user, 0, 0);
+
         assertEq(cauldron.vaults(vaultId).owner, user);
     }
 
     function testDestroyVault() public canSkip {
-        vm.startPrank(user);
-        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
-        assertEq(cauldron.vaults(vaultId).owner, user);
+        bytes12 vaultId = _buildVault(user, 0, 0);
+
+        vm.prank(user);
         ladle.destroy(vaultId);
+
         assertEq(cauldron.vaults(vaultId).owner, address(0));
-        vm.stopPrank();
     }
 
     function testMergeVaults() public canSkip {
@@ -271,16 +278,10 @@ contract ZeroStateTest is ZeroState {
         ilk.approve(address(ilkJoin), posted * 2);
 
         // Build first vault
-        vm.startPrank(user);
-        (bytes12 vaultId1,) = ladle.build(seriesId, ilkId, 0);
-        ladle.pour(vaultId1, user, posted.i128(), borrowed.i128());
-        vm.stopPrank();
+        bytes12 vaultId1 = _buildVault(user, posted, 0);
 
         // Build second vault
-        vm.startPrank(user);
-        (bytes12 vaultId2,) = ladle.build(seriesId, ilkId, 0);
-        ladle.pour(vaultId2, other, posted.i128(), borrowed.i128());
-        vm.stopPrank();
+        bytes12 vaultId2 = _buildVault(user, posted, 0);
 
         // Get balances of each
         DataTypes.Balances memory balances = cauldron.balances(vaultId1);
@@ -316,10 +317,7 @@ contract ZeroStateTest is ZeroState {
         ilk.approve(address(ilkJoin), posted);
 
         // Build vault
-        vm.startPrank(user);
-        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
-        ladle.pour(vaultId, user, posted.i128(), borrowed.i128());
-        vm.stopPrank();
+        bytes12 vaultId = _buildVault(user, posted, borrowed);
 
         // Get vault balances
         DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
@@ -353,6 +351,7 @@ contract ZeroStateTest is ZeroState {
         DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
         (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
         uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
+        
         cash(ilk, user, posted);
         vm.prank(user);
         ilk.approve(address(ladle), posted);
@@ -375,6 +374,7 @@ contract ZeroStateTest is ZeroState {
         DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
         (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
         uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
+
         cash(ilk, user, posted);
         vm.prank(user);
         ilk.approve(address(ladle), posted);
@@ -410,10 +410,7 @@ contract ZeroStateTest is ZeroState {
         ilk.approve(address(ilkJoin), posted);
 
         // Build vault
-        vm.startPrank(user);
-        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
-        ladle.pour(vaultId, user, posted.i128(), 0);
-        vm.stopPrank();
+        bytes12 vaultId = _buildVault(user, posted, 0);
 
         // Get vault balances
         DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
@@ -434,39 +431,58 @@ contract ZeroStateTest is ZeroState {
     /////////////*/
 
     function testLend() public canSkip {
-        lend(user, baseUnit);
+        _lend(user, baseUnit);
     }
 
     function testCloseLendBeforeMaturity() public canSkip {
-        lend(user, baseUnit);
+        _lend(user, baseUnit);
+        _clearBatch(batch.length);
 
-        // Why does the fyToken balance of user not change after this?
+        uint256 userFYTokens = fyToken.balanceOf(user);
+        uint256 poolFYTokens = fyToken.balanceOf(address(pool));
+
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, address(pool), baseUnit));
         batch.push(
             abi.encodeWithSelector(
                 ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellFYToken.selector, user, 0)
             )
         );
+
+        vm.startPrank(user);
+        fyToken.approve(address(ladle), baseUnit);
+        ladle.batch(batch);
+        vm.stopPrank();
+
+        // not sure why the user has > 1 baseUnit of fyTokens before this call
+        assertEq(fyToken.balanceOf(user), userFYTokens - baseUnit);
+        assertEq(fyToken.balanceOf(address(pool)), poolFYTokens + baseUnit);
+        // this one could maybe be improved, buyBasePreview is not the correct way however
+        assertGt(base.balanceOf(user), 0); // will have just below one baseUnit
     }
 
     function testCloseLendAfterMaturity() public canSkip {
-        lend(user, baseUnit);
-        afterMaturity();
+        _lend(user, baseUnit);
+        _afterMaturity();
+
+        uint256 userFYTokens = fyToken.balanceOf(user);
 
         vm.startPrank(user);
         fyToken.approve(address(fyToken), fyToken.balanceOf(user));
         // fyToken.redeem(user, fyToken.balanceOf(user));
         fyToken.redeem(fyToken.balanceOf(user), user, user);
         vm.stopPrank();
+
+        assertEq(base.balanceOf(user), userFYTokens); // redeemed all fyTokens 1-1
+        assertEq(fyToken.balanceOf(user), 0);
     }
 
     function testRollLendingBeforeMaturity() public canSkip {
-        lend(user, baseUnit);
+        _lend(user, baseUnit);
     }
 
     function testRollLendingAfterMaturity() public canSkip {
-        lend(user, baseUnit);
-        afterMaturity();
+        _lend(user, baseUnit);
+        _afterMaturity();
     }
 
     /*/////////////////////////
@@ -474,7 +490,7 @@ contract ZeroStateTest is ZeroState {
     /////////////////////////*/
 
     function testProvideLiquidityByBorrowing() public canSkip {
-        borrowAndPool(user, baseUnit);
+        _borrowAndPool(user, baseUnit);
     }
 
     function testProvideLiquidityWithUnderlying() public canSkip {
@@ -506,6 +522,8 @@ contract ZeroStateTest is ZeroState {
 
         assertEq(pool.getBaseBalance(), poolBaseBalance + baseToPool - 1);
         assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + baseToFYToken);
+        assertLt(base.balanceOf(user), baseUnit); // user ends with 1 wei
+        assertGt(pool.balanceOf(user), 0); // user will have a little less than one lp token
     }
 
     function testProvideLiquidityByBuying() public canSkip {
@@ -532,13 +550,21 @@ contract ZeroStateTest is ZeroState {
 
         vm.prank(user);
         ladle.batch(batch);
+
+        // not really sure about the math of these changes
+        // user is left with a small amount of base and an amount of lp tokens less than baseUnit * 4
+        assertLt(base.balanceOf(user), baseUnit * 4);
+        assertGt(pool.balanceOf(user), 0);
     }
 
+    // not confident in the assertions for these liquidity removal functions
     function testRemoveLiquidityAndRepay() public canSkip {
-        bytes12 vaultId = borrowAndPool(user, baseUnit);
+        bytes12 vaultId = _borrowAndPool(user, baseUnit);
         uint256 lpTokensBurnt = pool.balanceOf(user);
 
-        clearBatch(batch.length);
+        uint256 userBaseTokens = base.balanceOf(user);
+
+        _clearBatch(batch.length);
 
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
@@ -560,13 +586,18 @@ contract ZeroStateTest is ZeroState {
         pool.approve(address(ladle), lpTokensBurnt);
         ladle.batch(batch);
         vm.stopPrank();
+
+        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10);
+        assertEq(pool.balanceOf(user), 0);
     }
 
     function testRemoveLiquidityRepayAndSell() public canSkip {
-        bytes12 vaultId = borrowAndPool(user, baseUnit);
+        bytes12 vaultId = _borrowAndPool(user, baseUnit);
         uint256 lpTokensBurnt = pool.balanceOf(user);
 
-        clearBatch(batch.length);
+        uint256 userBaseTokens = base.balanceOf(user);
+
+        _clearBatch(batch.length);
 
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
@@ -593,14 +624,19 @@ contract ZeroStateTest is ZeroState {
         pool.approve(address(ladle), lpTokensBurnt);
         ladle.batch(batch);
         vm.stopPrank();
+
+        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10e16);
+        assertEq(pool.balanceOf(user), 0);
     }
 
     function testRemoveLiquidityAndRedeem() public canSkip {
-        bytes12 vaultId = borrowAndPool(user, baseUnit);
+        bytes12 vaultId = _borrowAndPool(user, baseUnit);
         uint256 lpTokensBurnt = pool.balanceOf(user);
 
-        clearBatch(batch.length);
-        afterMaturity();
+        uint256 userBaseTokens = base.balanceOf(user);
+
+        _clearBatch(batch.length);
+        _afterMaturity();
 
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
@@ -616,13 +652,19 @@ contract ZeroStateTest is ZeroState {
         pool.approve(address(ladle), lpTokensBurnt);
         ladle.batch(batch);
         vm.stopPrank();
+
+        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10e16);
+        assertEq(pool.balanceOf(user), 0);
     }
 
     function testRemoveLiquidityAndSell() public canSkip {
-        bytes12 vaultId = borrowAndPool(user, baseUnit);
+        bytes12 vaultId = _borrowAndPool(user, baseUnit);
         uint256 lpTokensBurnt = pool.balanceOf(user);
 
-        clearBatch(batch.length);
+        uint256 userBaseTokens = base.balanceOf(user);
+
+        _clearBatch(batch.length);
+
 
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
@@ -637,6 +679,9 @@ contract ZeroStateTest is ZeroState {
         pool.approve(address(ladle), lpTokensBurnt);
         ladle.batch(batch);
         vm.stopPrank();
+
+        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10e16);
+        assertEq(pool.balanceOf(user), 0);
     }
 
     function testRollLiquidity() public canSkip {}
