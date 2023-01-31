@@ -94,6 +94,7 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         vm.label(address(repayFromLadleModule), "repayFromLadleModule");
 
         strategy = IStrategy(vm.envAddress(STRATEGY));
+        vm.label(address(strategy), "strategy");
         seriesId = vm.envOr(SERIES_ID, bytes32(0)).b6();
         ilkId = vm.envOr(ILK_ID, bytes32(0)).b6();
         baseId = cauldron.series(seriesId).baseId;
@@ -237,6 +238,37 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         assertEq(finalBalances.art, initialBalances.art + fyTokenToPool);
 
         return vaultId;
+    }
+
+    function _borrowAndPoolStrategy(address guy, uint256 totalBase) internal {
+        uint256 poolBaseBalance = pool.getBaseBalance();
+        uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
+        uint256 fyTokenToPool = (totalBase * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
+        uint256 baseToPool = totalBase - fyTokenToPool;
+
+        cash(base, guy, totalBase);
+        vm.prank(guy);
+        base.approve(address(ladle), totalBase);
+
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, baseId, 0));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(baseJoin), fyTokenToPool));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseToPool));
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(pool), fyTokenToPool, fyTokenToPool));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.mint.selector, address(strategy), address(guy), 0, type(uint256).max)
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector, address(strategy), abi.encodeWithSelector(IStrategy.mint.selector, address(guy))
+            )
+        );
+
+        vm.prank(guy);
+        ladle.batch(batch);
     }
 }
 
@@ -426,6 +458,26 @@ contract ZeroStateTest is ZeroState {
     /// DEBT REPAYMENT ///
     ////////////////////*/
 
+    function testRepayUnderlyingBeforeMaturity() public canSkip {
+
+    }
+
+    function testRepayVaultUnderlyingBeforeMaturity() public canSkip {
+
+    }
+
+    function testRepayUnderlyingAfterMaturity() public canSkip {
+
+    }
+
+    function testReedem() public canSkip {
+
+    }
+
+    function testRollDebtBeforeMaturity() public canSkip {
+
+    }
+
     /*/////////////
     /// LENDING ///
     /////////////*/
@@ -441,6 +493,9 @@ contract ZeroStateTest is ZeroState {
         uint256 userFYTokens = fyToken.balanceOf(user);
         uint256 poolFYTokens = fyToken.balanceOf(address(pool));
 
+        vm.prank(user);
+        fyToken.approve(address(ladle), baseUnit);
+
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, address(pool), baseUnit));
         batch.push(
             abi.encodeWithSelector(
@@ -448,10 +503,8 @@ contract ZeroStateTest is ZeroState {
             )
         );
 
-        vm.startPrank(user);
-        fyToken.approve(address(ladle), baseUnit);
+        vm.prank(user);
         ladle.batch(batch);
-        vm.stopPrank();
 
         // not sure why the user has > 1 baseUnit of fyTokens before this call
         assertEq(fyToken.balanceOf(user), userFYTokens - baseUnit);
@@ -566,6 +619,9 @@ contract ZeroStateTest is ZeroState {
 
         _clearBatch(batch.length);
 
+        vm.prank(user);
+        pool.approve(address(ladle), lpTokensBurnt);
+
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
             abi.encodeWithSelector(
@@ -582,10 +638,8 @@ contract ZeroStateTest is ZeroState {
             )
         );
 
-        vm.startPrank(user);
-        pool.approve(address(ladle), lpTokensBurnt);
+        vm.prank(user);
         ladle.batch(batch);
-        vm.stopPrank();
 
         assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10);
         assertEq(pool.balanceOf(user), 0);
@@ -598,6 +652,9 @@ contract ZeroStateTest is ZeroState {
         uint256 userBaseTokens = base.balanceOf(user);
 
         _clearBatch(batch.length);
+
+        vm.prank(user);
+        pool.approve(address(ladle), lpTokensBurnt);
 
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
@@ -620,10 +677,8 @@ contract ZeroStateTest is ZeroState {
             )
         );
 
-        vm.startPrank(user);
-        pool.approve(address(ladle), lpTokensBurnt);
+        vm.prank(user);
         ladle.batch(batch);
-        vm.stopPrank();
 
         assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10e16);
         assertEq(pool.balanceOf(user), 0);
@@ -638,6 +693,9 @@ contract ZeroStateTest is ZeroState {
         _clearBatch(batch.length);
         _afterMaturity();
 
+        vm.prank(user);
+        pool.approve(address(ladle), lpTokensBurnt);
+
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
             abi.encodeWithSelector(
@@ -648,10 +706,8 @@ contract ZeroStateTest is ZeroState {
         );
         batch.push(abi.encodeWithSelector(ladle.redeem.selector, seriesId, user, 0));
 
-        vm.startPrank(user);
-        pool.approve(address(ladle), lpTokensBurnt);
+        vm.prank(user);
         ladle.batch(batch);
-        vm.stopPrank();
 
         assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10e16);
         assertEq(pool.balanceOf(user), 0);
@@ -665,6 +721,8 @@ contract ZeroStateTest is ZeroState {
 
         _clearBatch(batch.length);
 
+        vm.prank(user);
+        pool.approve(address(ladle), lpTokensBurnt);
 
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
@@ -675,16 +733,16 @@ contract ZeroStateTest is ZeroState {
             )
         );
 
-        vm.startPrank(user);
-        pool.approve(address(ladle), lpTokensBurnt);
+        vm.prank(user);
         ladle.batch(batch);
-        vm.stopPrank();
 
         assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10e16);
         assertEq(pool.balanceOf(user), 0);
     }
 
-    function testRollLiquidity() public canSkip {}
+    function testRollLiquidity() public canSkip {
+
+    }
 
     /*////////////////
     /// STRATEGIES ///
@@ -694,52 +752,108 @@ contract ZeroStateTest is ZeroState {
         _borrowAndPoolStrategy(user, baseUnit);
     }
 
-    function testProvideLiquidityToStrategyByBuying() public canSkip {}
+    function testProvideLiquidityToStrategyByBuying() public canSkip {
+        uint256 baseWithSlippage = baseUnit * 4;
+        uint256 fyTokensToBuy = baseUnit;
+
+        cash(base, user, baseUnit * 4);
+        vm.prank(user);
+        base.approve(address(ladle), baseUnit * 4);
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseWithSlippage));
+        batch.push(abi.encodeWithSelector(
+            ladle.route.selector,
+            address(pool),
+            abi.encodeWithSelector(IPool.mintWithBase.selector, address(strategy), user, fyTokensToBuy, 0, type(uint256).max)
+        ));
+        batch.push(abi.encodeWithSelector(
+            ladle.route.selector,
+            address(strategy),
+            abi.encodeWithSelector(IStrategy.mint.selector, user)
+        ));
+
+        vm.prank(user);
+        ladle.batch(batch);
+
+        assertLt(base.balanceOf(user), baseUnit * 4);
+        assertApproxEqAbs(strategy.balanceOf(user), baseUnit * 4, 10e16);
+    }
 
     function testRemoveLiquidityFromStrategy() public canSkip {
         _borrowAndPoolStrategy(user, baseUnit);
-    }
+        uint256 strategyTokensBurnt = strategy.balanceOf(user);
 
-    function testRemoveLiquidityFromDeprecatedStrategy() public canSkip {
-        _borrowAndPoolStrategy(user, baseUnit);
-    }
+        _clearBatch(batch.length);
 
-    function _borrowAndPoolStrategy(address guy, uint256 totalBase) internal {
-        uint256 poolBaseBalance = pool.getBaseBalance();
-        uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
-        uint256 fyTokenToPool = (totalBase * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
-        uint256 baseToPool = totalBase - fyTokenToPool;
+        vm.prank(user);
+        strategy.approve(address(ladle), strategyTokensBurnt);
 
-        cash(base, guy, totalBase);
-        vm.prank(guy);
-        base.approve(address(ladle), totalBase);
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(strategy), address(strategy), strategyTokensBurnt));
+        batch.push(abi.encodeWithSelector(
+            ladle.route.selector, 
+            address(strategy),
+            abi.encodeWithSelector(IStrategy.burn.selector, address(pool))
+        ));
 
-        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, baseId, 0));
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(baseJoin), fyTokenToPool));
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseToPool));
-        batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(pool), fyTokenToPool, fyTokenToPool));
+        uint256 lpTokensBurnt = pool.balanceOf(user); // why is this 0?
+
+        _clearBatch(batch.length);
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
         batch.push(
             abi.encodeWithSelector(
                 ladle.route.selector,
                 address(pool),
-                abi.encodeWithSelector(IPool.mint.selector, address(strategy), address(guy), 0, type(uint256).max)
-            )
-        );
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(strategy), abi.encodeWithSelector(IStrategy.mint.selector, address(guy))
+                abi.encodeWithSelector(IPool.burnForBase.selector, user, 0, type(uint256).max)
             )
         );
 
-        vm.prank(guy);
+        vm.prank(user);
         ladle.batch(batch);
+    }
+
+    // Is this one needed? (Are we still using v1 strategies?)
+    function testRemoveLiquidityFromDeprecatedStrategy() public canSkip {
+        _borrowAndPoolStrategy(user, baseUnit);
     }
 
     /*///////////
     /// ETHER ///
     ///////////*/
 
+    function testPostEtherCollateral() public canSkip {
+
+    }
+
+    function testWithdrawEtherCollateral() public canSkip {
+
+    }
+
+    function testRedeemfyETH() public canSkip {
+
+    }
+
+    function testProvideEtherLiquidityByBorrowing() public canSkip {
+
+    }
+
+    function testProvideEtherLiquidityByBuying() public canSkip {
+
+    }
+
+    function testRemoveEtherLiquidity() public canSkip {
+
+    }
+
     /*/////////////
     /// ERC1155 ///
     /////////////*/
+
+    function testPostERC1155Collateral() public canSkip {
+
+    }
+
+    function testWithdrawERC1155Collateral() public canSkip {
+        
+    }
 }
