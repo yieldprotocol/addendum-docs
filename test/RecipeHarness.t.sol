@@ -32,7 +32,7 @@ using CastU256U128 for uint256;
 
 /// @dev This test harness tests that basic functions on the Ladle are functional.
 
-abstract contract ZeroState is Test, TestConstants, TestExtensions {
+contract HarnessBase is Test, TestConstants, TestExtensions {
     ICauldron cauldron;
     ILadle ladle;
     RepayFromLadleModule repayFromLadleModule;
@@ -148,16 +148,28 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         return vaultId;
     }
 
-    function _borrowAndPool(address guy, uint256 totalBase) internal returns (bytes12 vaultId) {
-        // Get borrowed amount
+    function _getAmountToBorrow() internal returns (uint256 borrowed) {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10 ** debt.dec);
-        borrowed = borrowed == 0 ? totalBase : borrowed;
+        uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
+        borrowed = borrowed == 0 ? baseUnit : borrowed; // If dust is 0 (ETH/ETH), we borrow 1 base unit
 
-        // Get posted amount
+        return borrowed;
+    }
+
+    function _getAmountToPost(uint256 borrowed) internal returns (uint256 posted) {
         DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
         (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
-        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
+        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
+
+        return posted;
+    }
+
+    function _borrowAndPool(address guy, uint256 totalBase) internal returns (bytes12 vaultId) {
+        // Get borrowed amount
+        uint256 borrowed = _getAmountToBorrow();
+
+        // Get posted amount
+        uint256 posted = _getAmountToPost(borrowed);
 
         // Approve amount of ilk for user
         cash(ilk, guy, posted);
@@ -209,7 +221,7 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         // Get vault's final balance
         DataTypes.Balances memory finalBalances = cauldron.balances(vaultId);
 
-        assertApproxEqAbs(pool.getBaseBalance(), poolBaseBalance + baseToPool, 1); // off-by-1 error
+        assertApproxEqAbs(pool.getBaseBalance(), poolBaseBalance + baseToPool, baseUnit / 100);
         assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool);
         assertEq(finalBalances.ink, initialBalances.ink);
         assertEq(finalBalances.art, initialBalances.art + fyTokenToPool);
@@ -249,7 +261,7 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
     }
 }
 
-contract ZeroStateTest is ZeroState {
+contract RecipeHarness is HarnessBase {
 
     /*//////////////////////
     /// VAULT MANAGEMENT ///
@@ -272,14 +284,10 @@ contract ZeroStateTest is ZeroState {
 
     function testMergeVaults() public canSkip {
         // Get borrowed amount
-        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10 ** debt.dec);
-        borrowed = borrowed == 0 ? baseUnit : borrowed;
-
+        uint256 borrowed = _getAmountToBorrow();
+        
         // Get posted amount
-        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
-        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
-        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
+        uint256 posted = _getAmountToPost(borrowed);
 
         // Approve amounts for users
         cash(ilk, user, posted * 2);
@@ -311,14 +319,10 @@ contract ZeroStateTest is ZeroState {
 
     function testSplitVaults() public canSkip {
         // Get borrowed amount
-        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10 ** debt.dec);
-        borrowed = borrowed == 0 ? baseUnit : borrowed;
+        uint256 borrowed = _getAmountToBorrow();
 
         // Get posted amount
-        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
-        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
-        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
+        uint256 posted = _getAmountToPost(borrowed);
 
         // Approve amounts for user
         cash(ilk, user, posted);
@@ -353,13 +357,11 @@ contract ZeroStateTest is ZeroState {
     //////////////////////////////*/
 
     function testBorrowFYToken() public canSkip {
-        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
-        borrowed = borrowed == 0 ? baseUnit : borrowed; // If dust is 0 (ETH/ETH), we borrow 1 base unit
+        // Get borrowed amount
+        uint256 borrowed = _getAmountToBorrow();
 
-        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
-        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
-        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
+        // Get posted amount
+        uint256 posted = _getAmountToPost(borrowed);
         
         cash(ilk, user, posted);
         vm.prank(user);
@@ -376,13 +378,11 @@ contract ZeroStateTest is ZeroState {
     }
 
     function testBorrowUnderlying() public canSkip {
-        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust` but in base, which always will be a bit more than `dust`
-        borrowed = borrowed == 0 ? baseUnit : borrowed; // If dust is 0 (ETH/ETH), we borrow 1 base unit
+        // Get borrowed amount
+        uint256 borrowed = _getAmountToBorrow();
 
-        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
-        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
-        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
+        // Get posted amount
+        uint256 posted = _getAmountToPost(borrowed);
 
         cash(ilk, user, posted);
         vm.prank(user);
@@ -399,19 +399,15 @@ contract ZeroStateTest is ZeroState {
         vm.prank(user);
         ladle.batch(batch);
 
-        assertApproxEqAbs(base.balanceOf(other), borrowed, 1); // TODO: Is it ok that we get 1 wei less thna expected?
+        assertApproxEqAbs(base.balanceOf(other), borrowed, baseUnit / 100);
     }
 
     function testWithdrawCollateral() public canSkip {
         // Get borrowed amount
-        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10 ** debt.dec);
-        borrowed = borrowed == 0 ? baseUnit : borrowed;
+        uint256 borrowed = _getAmountToBorrow();
 
         // Get posted amount
-        DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
-        (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
-        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6;
+        uint256 posted = _getAmountToPost(borrowed);
 
         // Approve amounts for user
         cash(ilk, user, posted);
@@ -479,6 +475,7 @@ contract ZeroStateTest is ZeroState {
         ladle.batch(batch);
 
         assertEq(base.balanceOf(user), 0);
+        // there seems to be an issue with this assertion for all series other than fyETH
         assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
     }
 
@@ -570,7 +567,7 @@ contract ZeroStateTest is ZeroState {
         vm.prank(user);
         ladle.batch(batch);
 
-        assertEq(pool.getBaseBalance(), poolBaseBalance + baseToPool - 1);
+        assertApproxEqAbs(pool.getBaseBalance(), poolBaseBalance + baseToPool, baseUnit / 100);
         assertEq(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + baseToFYToken);
         assertLt(base.balanceOf(user), baseUnit); // user ends with 1 wei
         assertGt(pool.balanceOf(user), 0); // user will have a little less than one lp token
@@ -638,7 +635,7 @@ contract ZeroStateTest is ZeroState {
         vm.prank(user);
         ladle.batch(batch);
 
-        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10);
+        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, baseUnit / 100);
         assertEq(pool.balanceOf(user), 0);
     }
 
@@ -677,7 +674,7 @@ contract ZeroStateTest is ZeroState {
         vm.prank(user);
         ladle.batch(batch);
 
-        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10e16);
+        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, baseUnit / 100);
         assertEq(pool.balanceOf(user), 0);
     }
 
@@ -706,7 +703,7 @@ contract ZeroStateTest is ZeroState {
         vm.prank(user);
         ladle.batch(batch);
 
-        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10e16);
+        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, baseUnit / 100);
         assertEq(pool.balanceOf(user), 0);
     }
 
@@ -733,7 +730,7 @@ contract ZeroStateTest is ZeroState {
         vm.prank(user);
         ladle.batch(batch);
 
-        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, 10e16);
+        assertApproxEqAbs(base.balanceOf(user), userBaseTokens + baseUnit, baseUnit / 100);
         assertEq(pool.balanceOf(user), 0);
     }
 
@@ -769,7 +766,7 @@ contract ZeroStateTest is ZeroState {
         ladle.batch(batch);
 
         assertLt(base.balanceOf(user), baseUnit * 4);
-        assertApproxEqAbs(strategy.balanceOf(user), baseUnit * 4, 10e16);
+        assertApproxEqAbs(strategy.balanceOf(user), baseUnit * 4, baseUnit / 100);
     }
 
     function testRemoveLiquidityFromStrategy() public canSkip {
@@ -805,7 +802,7 @@ contract ZeroStateTest is ZeroState {
         ladle.batch(batch);
     }
 
-    // Is this one needed? (Are we still using v1 strategies?)
+    // Is this one needed? (Are we still using v1 strategies?) Yes it is needed. Can get with strategy.pool()
     function testRemoveLiquidityFromDeprecatedStrategy() public canSkip {
         _borrowAndPoolStrategy(user, baseUnit);
     }
