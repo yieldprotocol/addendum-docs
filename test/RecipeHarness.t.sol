@@ -139,29 +139,6 @@ abstract contract ZeroState is Test, TestConstants, TestExtensions {
         vm.warp(fyToken.maturity());
     }
 
-    function _lend(address guy, uint256 totalBase) internal {
-        uint256 baseSold = totalBase;
-
-        cash(base, guy, baseSold);
-        vm.prank(guy);
-        base.approve(address(ladle), baseSold);
-
-        uint256 poolBaseBalance = pool.getBaseBalance();
-
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseSold));
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, guy, 0)
-            )
-        );
-
-        vm.prank(guy);
-        ladle.batch(batch);
-
-        assertEq(base.balanceOf(guy), 0);
-        assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
-    }
-
     function _buildVault(address guy, uint256 ilkAmount, uint256 baseAmount) internal returns (bytes12 vaultId) {
         vm.startPrank(guy);
         (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
@@ -483,12 +460,30 @@ contract ZeroStateTest is ZeroState {
     /////////////*/
 
     function testLend() public canSkip {
-        _lend(user, baseUnit);
+        uint256 baseSold = baseUnit;
+
+        cash(base, user, baseSold);
+        vm.prank(user);
+        base.approve(address(ladle), baseSold);
+
+        uint256 poolBaseBalance = pool.getBaseBalance();
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseSold));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
+            )
+        );
+
+        vm.prank(user);
+        ladle.batch(batch);
+
+        assertEq(base.balanceOf(user), 0);
+        assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
     }
 
     function testCloseLendBeforeMaturity() public canSkip {
-        _lend(user, baseUnit);
-        _clearBatch(batch.length);
+        cash(fyToken, user, baseUnit);
 
         uint256 userFYTokens = fyToken.balanceOf(user);
         uint256 poolFYTokens = fyToken.balanceOf(address(pool));
@@ -514,8 +509,9 @@ contract ZeroStateTest is ZeroState {
     }
 
     function testCloseLendAfterMaturity() public canSkip {
-        _lend(user, baseUnit);
         _afterMaturity();
+
+        cash(fyToken, user, baseUnit);
 
         uint256 userFYTokens = fyToken.balanceOf(user);
 
@@ -530,12 +526,13 @@ contract ZeroStateTest is ZeroState {
     }
 
     function testRollLendingBeforeMaturity() public canSkip {
-        _lend(user, baseUnit);
+        cash(fyToken, user, baseUnit);
     }
 
     function testRollLendingAfterMaturity() public canSkip {
-        _lend(user, baseUnit);
         _afterMaturity();
+
+        cash(fyToken, user, baseUnit);
     }
 
     /*/////////////////////////
@@ -854,6 +851,6 @@ contract ZeroStateTest is ZeroState {
     }
 
     function testWithdrawERC1155Collateral() public canSkip {
-        
+
     }
 }
