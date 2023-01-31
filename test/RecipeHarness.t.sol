@@ -737,10 +737,6 @@ contract ZeroStateTest is ZeroState {
         assertEq(pool.balanceOf(user), 0);
     }
 
-    function testRollLiquidity() public canSkip {
-
-    }
-
     /*////////////////
     /// STRATEGIES ///
     ////////////////*/
