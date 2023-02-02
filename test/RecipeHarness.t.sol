@@ -150,6 +150,7 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
     function _buildVault(uint256 posted, uint256 borrowed) internal returns (bytes12 vaultId) {
         vm.startPrank(user);
         (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        // TODO: If you are calling `ladle.pour`, you need to transfer `posted` to the ilkJoin first.
         ladle.pour(vaultId, user, posted.i128(), borrowed.i128());
         vm.stopPrank();
 
@@ -157,6 +158,8 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
     }
 
     function _orchestrateVault(uint256 posted, uint256 borrowed) internal returns (bytes12 vaultId) {
+        // TODO: This seems identical to the function above, just using batching and correctly transferring the `posted` amount to the ilkJoin.
+        // I suggest removing it.
         // Build vault and provide ink and art
         vm.startPrank(user);
         (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
@@ -373,6 +376,7 @@ contract RecipeHarness is HarnessBase {
         vm.prank(user);
         ladle.batch(batch);
 
+        // TODO: I would also assert here that the balances match `posted` and `borrowed`
         assertEq(fyToken.balanceOf(other), borrowed);
     }
 
@@ -389,6 +393,9 @@ contract RecipeHarness is HarnessBase {
 
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
+
+        // TODO: `borrowed` is a base amount, and `posted` is calculated as if it were a fyToken amount.
+        // This works anyway because we calculate `posted` as twice what it would need to be in `_getAmountToPost`.
         batch.push(
             abi.encodeWithSelector(
                 ladle.serve.selector, bytes12(0), other, uint128(posted), uint128(borrowed), type(uint128).max
@@ -398,6 +405,7 @@ contract RecipeHarness is HarnessBase {
         vm.prank(user);
         ladle.batch(batch);
 
+        // TODO: I would also assert that the balances.art of the user is within a 10% of `borrowed`, to make sure he was not ripped off.
         assertApproxEqAbs(base.balanceOf(other), borrowed, baseUnit / 100);
     }
 
@@ -421,6 +429,8 @@ contract RecipeHarness is HarnessBase {
 
         batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, user, posted.i128() * -1, 0));
         batch.push(abi.encodeWithSelector(ladle.destroy.selector, vaultId)); // will only succeed if vault has no collateral or debt
+
+        // TODO: I would assert that the user received `posted`
 
         vm.prank(user);
         ladle.batch(batch);
@@ -458,6 +468,7 @@ contract RecipeHarness is HarnessBase {
 
         DataTypes.Balances memory newBalances = cauldron.balances(vaultId);
 
+        // TODO: As a shortcut, you can assert that at least `base.balanceOf(user)` was repaid, since you always buy fyToken below parity
         assertLt(newBalances.art, initialBalances.art); // should calculate the exact amount of art repaid
         assertEq(base.balanceOf(user), 0);
     }
@@ -488,6 +499,7 @@ contract RecipeHarness is HarnessBase {
 
         DataTypes.Balances memory newBalances = cauldron.balances(vaultId);
 
+        // TODO: You can test that the user spent no more base than initialBalances.art, since you always buy fyToken below parity
         assertEq(newBalances.art, 0);
     }
 
@@ -516,6 +528,7 @@ contract RecipeHarness is HarnessBase {
 
         DataTypes.Balances memory finalBalances = cauldron.balances(vaultId);
 
+        // TODO: You can test that the user spent exactly initialBalances.art base
         assertEq(finalBalances.art, 0);
     }
 
@@ -529,7 +542,7 @@ contract RecipeHarness is HarnessBase {
         fyToken.redeem(initialFYTokens, user, user);
 
         assertEq(fyToken.balanceOf(user), 0);
-        assertEq(base.balanceOf(user), initialFYTokens);        
+        assertEq(base.balanceOf(user), initialFYTokens); // TODO: This would be different for mature fyToken. For sanity, you can check that the user gets between 1.0 and 1.1 base per fyToken.   
     }
 
     function testRollDebtBeforeMaturity() public canSkip {
@@ -562,6 +575,8 @@ contract RecipeHarness is HarnessBase {
         assertEq(base.balanceOf(user), 0);
         // there seems to be an issue with this assertion for all series other than fyETH
         // assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
+        // TODO: Maybe because of Euler approximation?
+        // TODO: Assert as well that the user got between 1.0 and 1.1 fyToken per base
     }
 
     function testCloseLendBeforeMaturity() public canSkip {
@@ -588,9 +603,11 @@ contract RecipeHarness is HarnessBase {
         assertEq(fyToken.balanceOf(address(pool)), poolFYTokens + baseUnit);
         // this one could maybe be improved, buyBasePreview is not the correct way however
         assertGt(base.balanceOf(user), 0); // will have just below one baseUnit
+        // TODO: Assert as well that the user got 0.9 and 1.0 base per fyToken
     }
 
     function testCloseLendAfterMaturity() public canSkip {
+        // TODO: This is the same as `testRedeem`, you can remove it
         _afterMaturity();
 
         cash(fyToken, user, baseUnit);
@@ -638,8 +655,6 @@ contract RecipeHarness is HarnessBase {
 
         assertApproxEqAbs(pool.getBaseBalance(), poolBaseBalance + baseToPool, baseUnit / 100);
         assertApproxEqAbs(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool, baseUnit / 100); // TODO: There is one wei lost somewhere
-        // assertEq(finalBalances.ink, fyTokenToPool);
-        // assertEq(finalBalances.art, fyTokenToPool);
         // TODO: Assert that the user has the correct amount of pool tokens
         // TODO: Maybe assert that the pool used all the base and fyToken supplied
     }
