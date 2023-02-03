@@ -338,6 +338,42 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
 
         _clearBatch();
     }
+
+    function _borrowAndPoolEther() internal returns (uint256 lpTokensMinted) {
+        vm.deal(user, 10 ether);
+        
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.moduleCall.selector,
+                address(wrapEtherModule),
+                abi.encodeWithSelector(wrapEtherModule.wrap.selector, address(baseJoin),  2 ether)
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.moduleCall.selector,
+                address(wrapEtherModule),
+                abi.encodeWithSelector(wrapEtherModule.wrap.selector, address(pool), 8 ether)
+            )
+        );
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, 0, address(pool), 2 ether, 2 ether));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(pool.mint.selector, user, user, 0 , type(uint256).max)
+            )
+        );
+
+        vm.prank(user);
+        bytes[] memory results = ladle.batch{ value: user.balance }(batch);
+        (,,uint256 lpTokensMinted) = abi.decode(results[4], (uint256, uint256, uint256));
+
+        _clearBatch();
+
+        return lpTokensMinted;
+    }
 }
 
 contract RecipeHarness is HarnessBase {
@@ -966,6 +1002,7 @@ contract RecipeHarness is HarnessBase {
     // Is this one needed? (Are we still using v1 strategies?) Yes it is needed. Can get with strategy.pool()
     function testRemoveLiquidityFromDeprecatedStrategy() public canSkip {
         _borrowAndPoolStrategy(user, baseUnit);
+        
     }
 
     /*///////////
@@ -1008,13 +1045,44 @@ contract RecipeHarness is HarnessBase {
     }
 
     function testProvideEtherLiquidityByBorrowing() public canSkip {
+        uint256 initialJoinBalance = baseJoin.storedBalance();
 
+        uint256 lpTokensMinted = _borrowAndPoolEther();
+
+        uint256 finalJoinBalance = baseJoin.storedBalance();
+        
+        assertEq(finalJoinBalance, initialJoinBalance + 2 ether);
+        assertEq(lpTokensMinted, 8 ether);
     }
 
     function testProvideEtherLiquidityByBuying() public canSkip {
+        vm.deal(user, 10 ether);
 
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.moduleCall.selector,
+                address(wrapEtherModule),
+                abi.encodeWithSelector(wrapEtherModule.wrap.selector, address(pool), 10 ether)
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(pool.mintWithBase.selector, user, address(ladle), 2 ether, 0, type(uint256).max)
+            )
+        );
+        batch.push(abi.encodeWithSelector(ladle.exitEther.selector, user));
+
+        vm.prank(user);
+        bytes[] memory results = ladle.batch{ value: user.balance }(batch);
+        (uint256 baseIn, uint256 fyTokenIn ,uint256 lpTokensMinted) = abi.decode(results[1], (uint256, uint256, uint256));
+
+        assertEq(lpTokensMinted, 10 ether);
     }
 
+    // Should test this? Doesn't include recipe but seems to just call exitEther
+    // at the end of the ordinary liquidity removal
     function testRemoveEtherLiquidity() public canSkip {
 
     }
