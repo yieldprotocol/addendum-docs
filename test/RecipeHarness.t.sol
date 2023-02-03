@@ -21,6 +21,8 @@ import {IFYToken}               from "lib/vault-v2/packages/foundry/contracts/in
 import {IJoin}                  from "lib/vault-v2/packages/foundry/contracts/interfaces/IJoin.sol";
 import {ILadle}                 from "lib/vault-v2/packages/foundry/contracts/interfaces/ILadle.sol";
 import {RepayFromLadleModule}   from "lib/vault-v2/packages/foundry/contracts/modules/RepayFromLadleModule.sol";
+import {WrapEtherModule}        from "lib/vault-v2/packages/foundry/contracts/modules/WrapEtherModule.sol";
+
 import {IPool}                  from "lib/yieldspace-tv/src/interfaces/IPool.sol";
 import {IStrategy}              from "lib/strategy-v2/contracts/interfaces/IStrategy.sol";
 
@@ -39,6 +41,7 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
     ICauldron cauldron;
     ILadle ladle;
     RepayFromLadleModule repayFromLadleModule;
+    WrapEtherModule wrapEtherModule;
 
     uint256 userPrivateKey = 0xBABE;
     address user = vm.addr(userPrivateKey);
@@ -83,6 +86,14 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
         _;
     }
 
+    modifier etherCollateral() {
+        if(ilkId != 0x303000000000) {
+            console.log("Not ETH collateral");
+            return;
+        }
+        _;
+    }
+
     function setUp() public virtual {
         string memory rpc = vm.envOr(RPC, HARNESS);
         vm.createSelectFork(rpc);
@@ -92,6 +103,7 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
         cauldron = ICauldron(addresses[network][CAULDRON]);
         ladle = ILadle(addresses[network][LADLE]);
         repayFromLadleModule = RepayFromLadleModule(0xd47a7473C83a1cC145407e82Def5Ae15F8b338c2);
+        wrapEtherModule = WrapEtherModule(0x22768FCaFe7BB9F03e31cb49823d1Ece30C0b8eA);
 
         strategy = IStrategy(vm.envAddress(STRATEGY));
         seriesId = vm.envOr(SERIES_ID, bytes32(0)).b6();
@@ -127,6 +139,7 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
         vm.label(address(cauldron), "cauldron");
         vm.label(address(ladle), "ladle");
         vm.label(address(repayFromLadleModule), "repayFromLadleModule");
+        vm.label(address(wrapEtherModule), "wrapEtherModule");
         vm.label(address(strategy), "strategy");
         vm.label(address(fyToken), "fyToken");
         vm.label(address(ilk), "ilk");
@@ -137,8 +150,8 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
         vm.label(address(pool), "pool");
     }
     
-    function _clearBatch(uint256 length) internal {
-        for (uint256 i = 0; i < length; i++) {
+    function _clearBatch() internal {
+        for (uint256 i = 0; i < batch.length; i++) {
             batch.pop();
         }
     }
@@ -171,8 +184,9 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
         );
 
         ladle.batch(batch);
-        _clearBatch(batch.length);
         vm.stopPrank();
+
+        _clearBatch();
 
         return vaultId;
     }
@@ -191,6 +205,41 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
         uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
 
         return posted;
+    }
+
+    function _postEther() internal returns (bytes12 vaultId, uint256 posted) {
+        vm.deal(user, 1 ether);
+        uint256 posted = user.balance;
+        
+        // Build vault
+        vm.prank(user);
+        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        
+        // DEPRECATED
+        // batch.push(abi.encodeWithSelector(ladle.joinEther.selector, ilkId));
+        
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.moduleCall.selector,
+                address(wrapEtherModule),
+                abi.encodeWithSelector(wrapEtherModule.wrap.selector, address(ilkJoin), posted)
+            )
+        );
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, address(ladle), posted, 0));
+
+
+
+        vm.prank(user);
+        // address(ladle).call{ value: posted }(abi.encodeWithSelector(ladle.batch.selector, batch));
+        ladle.batch{ value: user.balance }(batch);
+        
+        DataTypes.Balances memory balances = cauldron.balances(vaultId);
+
+        assertEq(balances.ink, posted);
+        
+        _clearBatch();
+
+        return (vaultId, posted);
     }
 
     // Borrow and pool requires creating a vault where the ilk and the base are the same, and using that
@@ -258,7 +307,43 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
         vm.prank(guy);
         ladle.batch(batch);
 
-        _clearBatch(batch.length);
+        _clearBatch();
+    }
+
+    function _borrowAndPoolEther() internal returns (uint256 lpTokensMinted) {
+        vm.deal(user, 10 ether);
+        
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.moduleCall.selector,
+                address(wrapEtherModule),
+                abi.encodeWithSelector(wrapEtherModule.wrap.selector, address(baseJoin),  2 ether)
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.moduleCall.selector,
+                address(wrapEtherModule),
+                abi.encodeWithSelector(wrapEtherModule.wrap.selector, address(pool), 8 ether)
+            )
+        );
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, 0, address(pool), 2 ether, 2 ether));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(pool.mint.selector, user, user, 0 , type(uint256).max)
+            )
+        );
+
+        vm.prank(user);
+        bytes[] memory results = ladle.batch{ value: user.balance }(batch);
+        (,,uint256 lpTokensMinted) = abi.decode(results[4], (uint256, uint256, uint256));
+
+        _clearBatch();
+
+        return lpTokensMinted;
     }
 }
 
@@ -901,7 +986,7 @@ contract RecipeHarness is HarnessBase {
 
         uint256 lpTokensBurnt = pool.balanceOf(user); // why is this 0?
 
-        _clearBatch(batch.length);
+        _clearBatch();
 
         // Remove liquidity and sell
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), lpTokensBurnt));
@@ -920,32 +1005,87 @@ contract RecipeHarness is HarnessBase {
     // Is this one needed? (Are we still using v1 strategies?) Yes it is needed. Can get with strategy.pool()
     function testRemoveLiquidityFromDeprecatedStrategy() public canSkip {
         _borrowAndPoolStrategy(user, baseUnit);
+        
     }
 
     /*///////////
     /// ETHER ///
     ///////////*/
 
-    function testPostEtherCollateral() public canSkip {
-
+    function testPostEtherCollateral() public canSkip etherCollateral {
+        _postEther();
     }
 
-    function testWithdrawEtherCollateral() public canSkip {
+    function testWithdrawEtherCollateral() public canSkip etherCollateral {
+        (bytes12 vaultId, uint256 posted) = _postEther();
 
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, address(ladle), -posted.i128(), 0));
+        batch.push(abi.encodeWithSelector(ladle.exitEther.selector, user));
+        batch.push(abi.encodeWithSelector(ladle.destroy.selector, vaultId));
+
+        vm.prank(user);
+        ladle.batch(batch);
+
+        assertEq(user.balance, 1 ether);
     }
 
     function testRedeemfyETH() public canSkip {
+        cash(fyToken, user, baseUnit);
+        vm.prank(user);
+        fyToken.approve(address(ladle), baseUnit);
 
+        _afterMaturity();
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, address(ladle), baseUnit));
+        batch.push(abi.encodeWithSelector(ladle.redeem.selector, seriesId, address(ladle), baseUnit));
+        batch.push(abi.encodeWithSelector(ladle.exitEther.selector, user));
+
+        vm.prank(user);
+        ladle.batch(batch);
+
+        console.log(base.balanceOf(user));
+        assertEq(user.balance, 1 ether);
     }
 
     function testProvideEtherLiquidityByBorrowing() public canSkip {
+        uint256 initialJoinBalance = baseJoin.storedBalance();
 
+        uint256 lpTokensMinted = _borrowAndPoolEther();
+
+        uint256 finalJoinBalance = baseJoin.storedBalance();
+        
+        assertEq(finalJoinBalance, initialJoinBalance + 2 ether);
+        assertEq(lpTokensMinted, 8 ether);
     }
 
     function testProvideEtherLiquidityByBuying() public canSkip {
+        vm.deal(user, 10 ether);
 
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.moduleCall.selector,
+                address(wrapEtherModule),
+                abi.encodeWithSelector(wrapEtherModule.wrap.selector, address(pool), 10 ether)
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(pool.mintWithBase.selector, user, address(ladle), 2 ether, 0, type(uint256).max)
+            )
+        );
+        batch.push(abi.encodeWithSelector(ladle.exitEther.selector, user));
+
+        vm.prank(user);
+        bytes[] memory results = ladle.batch{ value: user.balance }(batch);
+        (uint256 baseIn, uint256 fyTokenIn ,uint256 lpTokensMinted) = abi.decode(results[1], (uint256, uint256, uint256));
+
+        assertEq(lpTokensMinted, 10 ether);
     }
 
+    // Should test this? Doesn't include recipe but seems to just call exitEther
+    // at the end of the ordinary liquidity removal
     function testRemoveEtherLiquidity() public canSkip {
 
     }

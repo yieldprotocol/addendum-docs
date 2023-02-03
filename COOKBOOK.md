@@ -908,7 +908,9 @@ This batch adds Ether as collateral to a vault. It can be combined with previous
   await ladle.batch([
     ladle.joinEtherAction(ethId),
     ladle.pourAction(vaultId, ignored, posted, 0),
-  ])
+  ],
+  { value: etherUsed }
+  )
 ```
 
 |Param  | Description|
@@ -929,7 +931,7 @@ The Ether withdrawn will be temporarily held by the Ladle until the end of the t
 ```
   await ladle.batch([
     ladle.pourAction(vaultId, ladle, withdrawn.mul(-1), 0),
-    ladle.exitEtherAction(ethId, receiver),
+    ladle.exitEtherAction(receiver),
     ladle.destroy(vaultId),
   ])
 ```
@@ -940,7 +942,6 @@ The Ether withdrawn will be temporarily held by the Ladle until the end of the t
 | `  ladle  `   | Ladle for Yield v2.      |
 | `  withdrawn  `   | Collateral withdrawn. Note it is a negative.      |
 | `  0  `   | Amount of debt to add to the vault, and fyTokens to send to the receiver of pour. None in this case.      |
-| `  ethId  `   | Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.      |
 | `  receiver  `   | Receiver of the collateral.      |
 
 **Limits:** The WETH balance of the related Join.
@@ -952,7 +953,7 @@ When redeeming fyETH the output will be in Wrapped Ether, to unwrap it a Ladle b
     ladle.forwardPermitAction(
       fyETH, ladle, redeemed, deadline, v, r, s
     ),
-    ladle.transferAction(fyETH, fyETH, redeemed),
+    ladle.transferAction(fyETH, ladle, redeemed),
     ladle.redeem(fyETHId, ladle, redeemed),
     ladle.exitEther(receiver),
   ])
