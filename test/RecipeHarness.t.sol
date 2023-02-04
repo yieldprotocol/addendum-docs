@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity >=0.8.13;
 
-import "lib/forge-std/src/Test.sol";
 import "lib/forge-std/src/console2.sol";
 
 import {CastBytes32Bytes6}      from "lib/yield-utils-v2/contracts/cast/CastBytes32Bytes6.sol";
@@ -26,10 +25,8 @@ import {WrapEtherModule}        from "lib/vault-v2/packages/foundry/contracts/mo
 import {IPool}                  from "lib/yieldspace-tv/src/interfaces/IPool.sol";
 import {IStrategy}              from "lib/strategy-v2/contracts/interfaces/IStrategy.sol";
 
-import {TestConstants}          from "./TestConstants.sol";
-import {TestExtensions}         from "./TestExtensions.sol";
+import {HarnessStorage}         from "./HarnessStorage.sol";
 
-using stdStorage for StdStorage;
 using CastBytes32Bytes6 for bytes32;
 using CastU256I128 for uint256;
 using CastU256U128 for uint256;
@@ -37,50 +34,14 @@ using CastU128I128 for uint128;
 
 /// @dev This test harness tests that basic functions on the Ladle are functional.
 
-contract HarnessBase is Test, TestConstants, TestExtensions {
-    ICauldron cauldron;
-    ILadle ladle;
-    RepayFromLadleModule repayFromLadleModule;
-    WrapEtherModule wrapEtherModule;
-
-    uint256 userPrivateKey = 0xBABE;
-    address user = vm.addr(userPrivateKey);
-    uint256 otherPrivateKey = 0xBEEF;
-    address other = vm.addr(otherPrivateKey);
-
-    bytes6 seriesId;
-    bytes6 ilkId;
-    bytes6 baseId;
-
-    IFYToken fyToken;
-    IERC20 ilk;
-    IERC20 base;
-    IJoin ilkJoin;
-    IJoin baseJoin;
-    IPool pool;
-    IStrategy strategy;
-
-    uint256 fyTokenUnit;
-    uint256 ilkUnit;
-    uint256 baseUnit;
-    uint256 poolUnit;
-
-    bytes[] batch;
-
-    bool ilkEnabled; // Skip tests if the ilk is not enabled for the series
-    bool ilkInCauldron; // Skip tests if the ilk is not in the cauldron
-    bool matchStrategy; // Skip tests if the series is not the selected for the strategy
-
-    bytes32 constant PERMIT_TYPEHASH =
-        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
-
+contract HarnessBase is HarnessStorage {
     modifier canSkip() {
         if (!ilkEnabled) {
-            console.log("Ilk not enabled for series, skipping test");
+            console2.log("Ilk not enabled for series, skipping test");
             return;
         }
         if (!ilkInCauldron) {
-            console.log("Ilk not in cauldron, skipping test");
+            console2.log("Ilk not in cauldron, skipping test");
             return;
         }
         _;
@@ -88,7 +49,7 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
 
     modifier etherCollateral() {
         if(ilkId != 0x303000000000) {
-            console.log("Not ETH collateral");
+            console2.log("Not ETH collateral");
             return;
         }
         _;
@@ -96,7 +57,7 @@ contract HarnessBase is Test, TestConstants, TestExtensions {
 
     modifier canProvideLiquidity() {
         if(ilkId != baseId) {
-            console.log("Unable to provide liquidity for this ilk-base pair");
+            console2.log("Unable to provide liquidity for this ilk-base pair");
             return;
         }
         _;
@@ -1066,7 +1027,6 @@ contract RecipeHarness is HarnessBase {
         vm.prank(user);
         ladle.batch(batch);
 
-        console.log(base.balanceOf(user));
         assertEq(user.balance, 1 ether);
     }
 
