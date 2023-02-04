@@ -19,8 +19,8 @@ SERIES_STRATEGIES=(\
 )
 
 ILK_IDS=(\ 
-# 0x3030 # ETH \ 
-  0x3031 # DAI \ 
+0x3030 # ETH \ 
+  # 0x3031 # DAI \ 
 # 0x3032 # USDC \ 
 # 0x3033 # WBTC \ 
 # 0x3034 # WSTETH \ 
@@ -77,7 +77,6 @@ for SERIES_STRATEGY in ${SERIES_STRATEGIES[@]}; do
     echo "SeriesId: " $SERIES_ID_
     echo "IlkId:    " $ILK_ID_
     echo "Strategy: " $STRATEGY_
-    STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -c test/RecipeHarness.t.sol -vvv
-#    STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -m testProvideLiquidityByBorrowing -vvv
+    STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -c test/RecipeHarness.t.sol -vvvv -m testRepayUnderlyingAfterMaturity
   done
 done
