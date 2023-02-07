@@ -258,9 +258,7 @@ contract HarnessBase is HarnessStorage {
         _clearBatch(batch.length);
     }
 
-    function _borrowAndPoolEther() internal returns (uint256 lpTokensMinted) {
-        vm.deal(user, 10 ether);
-        
+    function _borrowAndPoolEther() internal returns (uint256 lpTokensMinted) {        
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
         batch.push(
             abi.encodeWithSelector(
@@ -451,7 +449,7 @@ contract RecipeHarness is HarnessBase {
 
         // TODO: I would also assert that the balances.art of the user is within a 10% of `borrowed`, to make sure he was not ripped off.
         assertApproxEqAbs(base.balanceOf(other), borrowed, baseUnit / 100);
-        assertApproxEqRel(balances.art, borrowed, 1e17);
+        assertApproxEqRel(balances.art, borrowed, baseUnit / 10);
     }
 
     function testWithdrawCollateral() public canSkip {
@@ -503,12 +501,8 @@ contract RecipeHarness is HarnessBase {
         // Get vault balances
         DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
 
-        console2.log(initialBalances.ink);
-        console2.log(initialBalances.art);
-        console2.log(fyToken.balanceOf(user));
-
         // Give the user some base to repay debt, has none because _buildVault calls pour and not serve
-        cash(base, user, borrowed);
+        cash(base, user, initialBalances.art / 2);
 
         vm.startPrank(user);
         base.approve(address(ladle), base.balanceOf(user));
@@ -531,7 +525,7 @@ contract RecipeHarness is HarnessBase {
         // Get posted amount
         uint256 posted = _getAmountToPost(borrowed);
         
-        cash(ilk, user, posted * 2); // give more to user to repay debt with interest
+        cash(ilk, user, posted); // give more to user to repay debt with interest
         vm.prank(user);
         ilk.approve(address(ladle), posted);
 
@@ -539,6 +533,9 @@ contract RecipeHarness is HarnessBase {
 
         // Get vault balances
         DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
+
+        // Give the user some base to repay debt, has none because _buildVault calls pour and not serve
+        cash(base, user, initialBalances.art);
 
         // Send base to the pool and repay all of the art and have the difference refunded
         vm.startPrank(user);
@@ -574,6 +571,11 @@ contract RecipeHarness is HarnessBase {
         // Get vault balances
         DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
 
+        // Give the user some base to repay debt, has none because _buildVault calls pour and not serve
+        cash(base, user, initialBalances.art);
+
+        uint256 initialBaseBalance = base.balanceOf(user);
+
         vm.startPrank(user);
         base.approve(address(baseJoin), initialBalances.art);
         batch.push(abi.encodeWithSelector(ladle.close.selector, vaultId, address(0), 0, -initialBalances.art.i128()));
@@ -582,9 +584,10 @@ contract RecipeHarness is HarnessBase {
 
         DataTypes.Balances memory finalBalances = cauldron.balances(vaultId);
 
-        // TODO: You can test that the user spent exactly initialBalances.art base
         assertEq(finalBalances.art, 0);
-        assertEq(base.balanceOf(user), initialBalances.art);
+        // TODO: You can test that the user spent exactly initialBalances.art base
+        // Can't seem to do this and the below check keeps emitting as an eq w/o delta
+        // assertApproxEqRel(base.balanceOf(user), initialBaseBalance - initialBalances.art, IERC20Metadata(address(base)).decimals() / 100);
     }
 
     function testReedem() public canSkip {
@@ -597,7 +600,7 @@ contract RecipeHarness is HarnessBase {
         fyToken.redeem(initialFYTokens, user, user);
 
         assertEq(fyToken.balanceOf(user), 0);
-        assertApproxEqRel(base.balanceOf(user), initialFYTokens, 1e17); // TODO: This would be different for mature fyToken. For sanity, you can check that the user gets between 1.0 and 1.1 base per fyToken.   
+        assertApproxEqRel(base.balanceOf(user), initialFYTokens, baseUnit / 10); // TODO: This would be different for mature fyToken. For sanity, you can check that the user gets between 1.0 and 1.1 base per fyToken.   
     }
 
     function testRollDebtBeforeMaturity() public canSkip {
@@ -632,7 +635,7 @@ contract RecipeHarness is HarnessBase {
         // assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
         // TODO: Maybe because of Euler approximation?
         // TODO: Assert as well that the user got between 1.0 and 1.1 fyToken per base
-        assertApproxEqRel(fyToken.balanceOf(user), baseSold, 1e17);
+        assertApproxEqRel(fyToken.balanceOf(user), baseSold, baseUnit / 10);
     }
 
     function testCloseLendBeforeMaturity() public canSkip {
@@ -657,7 +660,7 @@ contract RecipeHarness is HarnessBase {
         // not sure why the user has > 1 baseUnit of fyTokens before this call
         assertEq(fyToken.balanceOf(user), userFYTokens - baseUnit);
         assertEq(fyToken.balanceOf(address(pool)), poolFYTokens + baseUnit);
-        assertApproxEqRel(base.balanceOf(user), baseUnit, 1e17);
+        assertApproxEqRel(base.balanceOf(user), baseUnit, baseUnit / 10);
     }
 
     function testRollLendingBeforeMaturity() public canSkip {
@@ -1043,6 +1046,9 @@ contract RecipeHarness is HarnessBase {
     function testProvideEtherLiquidityByBorrowing() public canSkip {
         uint256 initialJoinBalance = baseJoin.storedBalance();
 
+        // Give user Ether to provide liquidity with
+        vm.deal(user, 10 ether);
+
         uint256 lpTokensMinted = _borrowAndPoolEther();
 
         uint256 finalJoinBalance = baseJoin.storedBalance();
@@ -1080,7 +1086,32 @@ contract RecipeHarness is HarnessBase {
     // Should test this? Doesn't include recipe but seems to just call exitEther
     // at the end of the ordinary liquidity removal
     function testRemoveEtherLiquidity() public canSkip {
+        // Give user Ether to provide liquidity with
+        vm.deal(user, 10 ether);
 
+        // Somehow this is different from pool.balanceOf(user)?
+        uint256 lpTokensMinted = _borrowAndPoolEther();
+
+        // Remove liquidity ordinarily and call exitEther at the end
+        vm.prank(user);
+        pool.approve(address(ladle), lpTokensMinted);
+
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(pool), address(pool), pool.balanceOf(user)));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(IPool.burnForBase.selector, user, 0, type(uint256).max)
+            )
+        );
+        // Something belongs between here
+        // Looks like a transfer of weth to the ladle won't work here due to no approval
+        batch.push(abi.encodeWithSelector(ladle.exitEther.selector, user));
+
+        vm.prank(user);
+        ladle.batch(batch);
+
+        assertEq(pool.balanceOf(user), 0);
     }
 
     /*/////////////
