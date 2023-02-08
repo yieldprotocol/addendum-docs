@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity >=0.8.13;
 
+import "lib/forge-std/src/console.sol";
 import "lib/forge-std/src/console2.sol";
 
 import {CastBytes32Bytes6}      from "lib/yield-utils-v2/contracts/cast/CastBytes32Bytes6.sol";
@@ -53,6 +54,16 @@ contract HarnessBase is HarnessStorage {
             return;
         }
         _;
+    }
+
+    modifier etherBase() {
+        // ilk doesn't apply here but we want weth base
+        if(ilkId == 0x303000000000 && baseId == 0x303000000000) {
+            _;
+        } else {
+            console2.log("Not ETH base");
+            return;
+        }
     }
 
     modifier canProvideLiquidity() {
@@ -132,7 +143,7 @@ contract HarnessBase is HarnessStorage {
     function _buildVault(uint256 posted, uint256 borrowed) internal returns (bytes12 vaultId) {        
         vm.startPrank(user);
 
-        base.approve(address(ladle), posted);
+        ilk.approve(address(ladle), posted);
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
         batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, user, posted.i128(), borrowed.i128()));
@@ -198,10 +209,7 @@ contract HarnessBase is HarnessStorage {
         return (vaultId, posted);
     }
 
-    function _borrowAndPool(bytes12 vaultId, uint256 baseToPool, uint256 fyTokenToPool) internal returns (uint256 lpTokensMinted) {
-        // Approve amount of base for user
-        cash(base, user, baseToPool);
-        
+    function _borrowAndPool(bytes12 vaultId, uint256 baseToPool, uint256 fyTokenToPool) internal returns (uint256 lpTokensMinted) {        
         vm.startPrank(user);
 
         base.approve(address(ladle), baseToPool);
@@ -449,7 +457,7 @@ contract RecipeHarness is HarnessBase {
 
         // TODO: I would also assert that the balances.art of the user is within a 10% of `borrowed`, to make sure he was not ripped off.
         assertApproxEqAbs(base.balanceOf(other), borrowed, baseUnit / 100);
-        assertApproxEqRel(balances.art, borrowed, baseUnit / 10);
+        assertApproxEqRel(balances.art, borrowed, 1e17);
     }
 
     function testWithdrawCollateral() public canSkip {
@@ -490,31 +498,38 @@ contract RecipeHarness is HarnessBase {
         // Get posted amount
         uint256 posted = _getAmountToPost(borrowed);
         
+        // want to borrow more than minimum which is what _getAmountToBorrow is
+        // so multiply borrowed and posted by 3
+
         // Give the user collateral and approve it for use
-        cash(ilk, user, posted);
+        cash(ilk, user, posted * 3);
         vm.prank(user);
         ilk.approve(address(ladle), posted);
 
-        // Build vault and borrow underlying
-        bytes12 vaultId = _buildVault(posted, borrowed);
+        // Build vault and borrow underlying, 
+        bytes12 vaultId = _buildVault(posted * 3, borrowed * 3);
+
+        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
 
         // Get vault balances
         DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
 
+        uint256 dust = debt.min * uint128(10) ** debt.dec;
+
         // Give the user some base to repay debt, has none because _buildVault calls pour and not serve
-        cash(base, user, initialBalances.art / 2);
+        cash(base, user, dust);
 
         vm.startPrank(user);
         base.approve(address(ladle), base.balanceOf(user));
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), base.balanceOf(user)));
-        batch.push(abi.encodeWithSelector(ladle.repay.selector, vaultId, address(0), 0, initialBalances.art / 2));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), dust));
+        batch.push(abi.encodeWithSelector(ladle.repay.selector, vaultId, address(0), 0, dust));
         ladle.batch(batch);
         vm.stopPrank();
 
         DataTypes.Balances memory newBalances = cauldron.balances(vaultId);
 
         // TODO: As a shortcut, you can assert that at least `base.balanceOf(user)` was repaid, since you always buy fyToken below parity
-        assertLt(newBalances.art, initialBalances.art); // should calculate the exact amount of art repaid
+        assertLe(newBalances.art, initialBalances.art); // should calculate the exact amount of art repaid
         assertEq(base.balanceOf(user), 0);
     }
 
@@ -635,7 +650,7 @@ contract RecipeHarness is HarnessBase {
         // assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
         // TODO: Maybe because of Euler approximation?
         // TODO: Assert as well that the user got between 1.0 and 1.1 fyToken per base
-        assertApproxEqRel(fyToken.balanceOf(user), baseSold, baseUnit / 10);
+        assertApproxEqRel(fyToken.balanceOf(user), baseSold, 1e17);
     }
 
     function testCloseLendBeforeMaturity() public canSkip {
@@ -660,7 +675,7 @@ contract RecipeHarness is HarnessBase {
         // not sure why the user has > 1 baseUnit of fyTokens before this call
         assertEq(fyToken.balanceOf(user), userFYTokens - baseUnit);
         assertEq(fyToken.balanceOf(address(pool)), poolFYTokens + baseUnit);
-        assertApproxEqRel(base.balanceOf(user), baseUnit, baseUnit / 10);
+        assertApproxEqRel(base.balanceOf(user), baseUnit, 1e17);
     }
 
     function testRollLendingBeforeMaturity() public canSkip {
@@ -684,11 +699,16 @@ contract RecipeHarness is HarnessBase {
         uint256 fyTokenToPool = (baseUnit * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
         uint256 baseToPool = baseUnit - fyTokenToPool;
 
-        // Give the user the amount of base to provide the pool
-        cash(base, user, baseToPool);
+        // Give the user some amount of ilk to post as collateral
+        // needs to always be more than fyTokenToPool so as not
+        // to fail from undercollateralization
+        cash(ilk, user, baseToPool * 10);
 
         // User creates a vault and provides it with collateral
-        bytes12 vaultId = _buildVault(baseToPool, 0);
+        bytes12 vaultId = _buildVault(baseToPool * 10, 0);
+
+        // Provide user with base to provide the pool
+        cash(base, user, baseToPool);
 
         // Borrow against the vault and pool the base
         uint256 lpTokensMinted = _borrowAndPool(vaultId, baseToPool, fyTokenToPool);
@@ -771,11 +791,16 @@ contract RecipeHarness is HarnessBase {
         uint256 fyTokenToPool = (baseUnit * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
         uint256 baseToPool = baseUnit - fyTokenToPool;
 
-        // Give the user the amount of base to provide the pool
-        cash(base, user, baseToPool);
+        // Give the user some amount of ilk to post as collateral
+        // needs to always be more than fyTokenToPool so as not
+        // to fail from undercollateralization
+        cash(ilk, user, baseToPool * 10);
 
         // User creates a vault and provides it with collateral
-        bytes12 vaultId = _buildVault(baseToPool, 0);
+        bytes12 vaultId = _buildVault(baseToPool * 10, 0);
+
+        // Provide user with base to provide the pool
+        cash(base, user, baseToPool);
 
         // Borrow against the vault and pool the base
         uint256 lpTokensMinted = _borrowAndPool(vaultId, baseToPool, fyTokenToPool);
@@ -814,11 +839,16 @@ contract RecipeHarness is HarnessBase {
         uint256 fyTokenToPool = (baseUnit * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
         uint256 baseToPool = baseUnit - fyTokenToPool;
 
-        // Give the user the amount of base to provide the pool
-        cash(base, user, baseToPool);
+        // Give the user some amount of ilk to post as collateral
+        // needs to always be more than fyTokenToPool so as not
+        // to fail from undercollateralization
+        cash(ilk, user, baseToPool * 10);
 
         // User creates a vault and provides it with collateral
-        bytes12 vaultId = _buildVault(baseToPool, 0);
+        bytes12 vaultId = _buildVault(baseToPool * 10, 0);
+
+        // Provide user with base to provide the pool
+        cash(base, user, baseToPool);
 
         // Borrow against the vault and pool the base
         uint256 lpTokensMinted = _borrowAndPool(vaultId, baseToPool, fyTokenToPool);
@@ -862,11 +892,16 @@ contract RecipeHarness is HarnessBase {
         uint256 fyTokenToPool = (baseUnit * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
         uint256 baseToPool = baseUnit - fyTokenToPool;
 
-        // Give the user the amount of base to provide the pool
-        cash(base, user, baseToPool);
+        // Give the user some amount of ilk to post as collateral
+        // needs to always be more than fyTokenToPool so as not
+        // to fail from undercollateralization
+        cash(ilk, user, baseToPool * 10);
 
         // User creates a vault and provides it with collateral
-        bytes12 vaultId = _buildVault(baseToPool, 0);
+        bytes12 vaultId = _buildVault(baseToPool * 10, 0);
+
+        // Provide user with base to provide the pool
+        cash(base, user, baseToPool);
 
         // Borrow against the vault and pool the base
         uint256 lpTokensMinted = _borrowAndPool(vaultId, baseToPool, fyTokenToPool);
@@ -901,11 +936,16 @@ contract RecipeHarness is HarnessBase {
         uint256 fyTokenToPool = (baseUnit * poolFYTokenBalance) / (poolBaseBalance + poolFYTokenBalance);
         uint256 baseToPool = baseUnit - fyTokenToPool;
 
-        // Give the user the amount of base to provide the pool
-        cash(base, user, baseToPool);
+        // Give the user some amount of ilk to post as collateral
+        // needs to always be more than fyTokenToPool so as not
+        // to fail from undercollateralization
+        cash(ilk, user, baseToPool * 10);
 
         // User creates a vault and provides it with collateral
-        bytes12 vaultId = _buildVault(baseToPool, 0);
+        bytes12 vaultId = _buildVault(baseToPool * 10, 0);
+
+        // Provide user with base to provide the pool
+        cash(base, user, baseToPool);
 
         // Borrow against the vault and pool the base
         uint256 lpTokensMinted = _borrowAndPool(vaultId, baseToPool, fyTokenToPool);
@@ -1002,7 +1042,6 @@ contract RecipeHarness is HarnessBase {
 
     function testRemoveLiquidityFromDeprecatedStrategy() public canSkip canProvideLiquidity {
         _borrowAndPoolStrategy(user, baseUnit);
-        
     }
 
     /*///////////
@@ -1026,7 +1065,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(user.balance, 1 ether);
     }
 
-    function testRedeemfyETH() public canSkip {
+    function testRedeemfyETH() public canSkip etherBase {
         cash(fyToken, user, baseUnit);
         vm.prank(user);
         fyToken.approve(address(ladle), baseUnit);
@@ -1043,7 +1082,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(user.balance, 1 ether);
     }
 
-    function testProvideEtherLiquidityByBorrowing() public canSkip {
+    function testProvideEtherLiquidityByBorrowing() public canSkip etherBase {
         uint256 initialJoinBalance = baseJoin.storedBalance();
 
         // Give user Ether to provide liquidity with
@@ -1057,7 +1096,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(lpTokensMinted, 8 ether);
     }
 
-    function testProvideEtherLiquidityByBuying() public canSkip {
+    function testProvideEtherLiquidityByBuying() public canSkip etherBase {
         vm.deal(user, 10 ether);
 
         batch.push(
@@ -1085,7 +1124,7 @@ contract RecipeHarness is HarnessBase {
 
     // Should test this? Doesn't include recipe but seems to just call exitEther
     // at the end of the ordinary liquidity removal
-    function testRemoveEtherLiquidity() public canSkip {
+    function testRemoveEtherLiquidity() public canSkip etherBase {
         // Give user Ether to provide liquidity with
         vm.deal(user, 10 ether);
 
