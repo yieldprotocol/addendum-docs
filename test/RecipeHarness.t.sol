@@ -82,8 +82,8 @@ contract HarnessBase is HarnessStorage {
 
         cauldron = ICauldron(addresses[network][CAULDRON]);
         ladle = ILadle(addresses[network][LADLE]);
-        repayFromLadleModule = RepayFromLadleModule(0xd47a7473C83a1cC145407e82Def5Ae15F8b338c2);
-        wrapEtherModule = WrapEtherModule(0x22768FCaFe7BB9F03e31cb49823d1Ece30C0b8eA);
+        repayFromLadleModule = RepayFromLadleModule(addresses[network][REPAYFROMLADLEMODULE]);
+        wrapEtherModule = WrapEtherModule(addresses[network][WRAPETHERMODULE]);
 
         strategy = IStrategy(vm.envAddress(STRATEGY));
         seriesId = vm.envOr(SERIES_ID, bytes32(0)).b6();
@@ -109,6 +109,18 @@ contract HarnessBase is HarnessStorage {
 
             matchStrategy = (address(strategy.fyToken()) == address(fyToken));
         }
+
+        // Provision Join with base
+        cash(base, address(ladle), baseUnit * 50);
+        uint256 amt = baseUnit * 50;
+        vm.startPrank(address(ladle));
+        base.approve(address(baseJoin), amt);
+        baseJoin.join(address(ladle), amt.u128());
+        vm.stopPrank();
+
+        // Provision pool
+        cash(base, address(pool), 10000 * baseUnit);
+        cash(fyToken, address(pool), 10000 * baseUnit);
     }
 
     /*//////////////////////
@@ -605,11 +617,13 @@ contract RecipeHarness is HarnessBase {
         // assertApproxEqRel(base.balanceOf(user), initialBaseBalance - initialBalances.art, IERC20Metadata(address(base)).decimals() / 100);
     }
 
-    function testReedem() public canSkip {
+    function testRedeem() public canSkip {
         cash(fyToken, user, baseUnit);
         _afterMaturity();
 
         uint256 initialFYTokens = fyToken.balanceOf(user);
+
+        console.log(baseJoin.storedBalance());
 
         vm.prank(user);
         fyToken.redeem(initialFYTokens, user, user);
@@ -646,8 +660,6 @@ contract RecipeHarness is HarnessBase {
         ladle.batch(batch);
 
         assertEq(base.balanceOf(user), 0);
-        // there seems to be an issue with this assertion for all series other than fyETH
-        // assertEq(pool.getBaseBalance(), poolBaseBalance + baseSold);
         // TODO: Maybe because of Euler approximation?
         // TODO: Assert as well that the user got between 1.0 and 1.1 fyToken per base
         assertApproxEqRel(fyToken.balanceOf(user), baseSold, 1e17);
