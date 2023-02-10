@@ -460,6 +460,47 @@ contract RecipeHarness is HarnessBase {
         assertApproxEqRel(balances.art, borrowed, 1e17);
     }
 
+    function testBorrowUnderlyingProvisioned() public canSkip {
+        // Get borrowed amount
+        uint256 borrowed = _getAmountToBorrow();
+
+        // Get posted amount
+        uint256 posted = _getAmountToPost(borrowed);
+
+        cash(ilk, user, posted);
+        vm.prank(user);
+        ilk.approve(address(ladle), posted);
+
+        cash(base, address(pool), 10_000 * baseUnit);
+        // cash(fyToken, address(pool), 10 * baseUnit);
+        vm.warp(block.timestamp + 1000000);
+        vm.startPrank(user);
+        pool.mint(user, user, 0, type(uint256).max);
+        vm.stopPrank();
+
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
+
+        // TODO: `borrowed` is a base amount, and `posted` is calculated as if it were a fyToken amount.
+        // This works anyway because we calculate `posted` as twice what it would need to be in `_getAmountToPost`.
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.serve.selector, bytes12(0), other, uint128(posted), uint128(borrowed), type(uint128).max
+            )
+        );
+
+        vm.prank(user);
+        bytes[] memory results = ladle.batch(batch);
+
+        bytes12 vaultId = abi.decode(results[0], (bytes12));
+
+        DataTypes.Balances memory balances = cauldron.balances(vaultId);
+
+        // TODO: I would also assert that the balances.art of the user is within a 10% of `borrowed`, to make sure he was not ripped off.
+        assertApproxEqAbs(base.balanceOf(other), borrowed, baseUnit / 100);
+        assertApproxEqRel(balances.art, borrowed, 1e17);
+    }
+
     function testWithdrawCollateral() public canSkip {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
@@ -618,7 +659,7 @@ contract RecipeHarness is HarnessBase {
         assertApproxEqRel(base.balanceOf(user), initialFYTokens, baseUnit / 10); // TODO: This would be different for mature fyToken. For sanity, you can check that the user gets between 1.0 and 1.1 base per fyToken.   
     }
 
-    function testRedeemWithProvisionedJoin() public canSkip {
+    function testRedeemWithProvisioned() public canSkip {
         // Provision Join with base
         cash(base, address(ladle), baseUnit * 50);
         uint256 amt = baseUnit * 50;
