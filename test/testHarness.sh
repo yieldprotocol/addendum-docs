@@ -68,12 +68,6 @@ export RPC="ARBITRUM"
 export NETWORK="ARBITRUM"
 export MOCK=false
 
-# testBorrowUnderlying -> fyTokenInForSharesOut
-# testRepayUnderlyingBeforeMaturity -> fyTokenOutForSharesIn
-# testRepayVaultUnderlyingBeforeMaturity -> sharesInForFYTokenOut
-# testLend -> fyTokenOutForSharesIn
-# testCloseLendBeforeMaturity -> sharesOutForFYTokenIn
-
 for SERIES_STRATEGY in ${SERIES_STRATEGIES[@]}; do
   # echo $SERIES_STRATEGY
   SERIES_ID_=`echo $SERIES_STRATEGY | sed 's/,.*//g'`
@@ -83,6 +77,5 @@ for SERIES_STRATEGY in ${SERIES_STRATEGIES[@]}; do
     echo "IlkId:    " $ILK_ID_
     echo "Strategy: " $STRATEGY_
     STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -c test/RecipeHarness.t.sol
-    # STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -c test/RecipeHarness.t.sol -vvvv -m testProvideLiquidityByBorrowing
   done
 done
