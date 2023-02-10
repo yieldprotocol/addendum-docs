@@ -109,18 +109,6 @@ contract HarnessBase is HarnessStorage {
 
             matchStrategy = (address(strategy.fyToken()) == address(fyToken));
         }
-
-        // Provision Join with base
-        cash(base, address(ladle), baseUnit * 50);
-        uint256 amt = baseUnit * 50;
-        vm.startPrank(address(ladle));
-        base.approve(address(baseJoin), amt);
-        baseJoin.join(address(ladle), amt.u128());
-        vm.stopPrank();
-
-        // Provision pool
-        cash(base, address(pool), 10000 * baseUnit);
-        cash(fyToken, address(pool), 10000 * baseUnit);
     }
 
     /*//////////////////////
@@ -623,8 +611,6 @@ contract RecipeHarness is HarnessBase {
 
         uint256 initialFYTokens = fyToken.balanceOf(user);
 
-        console.log(baseJoin.storedBalance());
-
         vm.prank(user);
         fyToken.redeem(initialFYTokens, user, user);
 
@@ -632,6 +618,30 @@ contract RecipeHarness is HarnessBase {
         assertApproxEqRel(base.balanceOf(user), initialFYTokens, baseUnit / 10); // TODO: This would be different for mature fyToken. For sanity, you can check that the user gets between 1.0 and 1.1 base per fyToken.   
     }
 
+    function testRedeemWithProvisionedJoin() public canSkip {
+        // Provision Join with base
+        cash(base, address(ladle), baseUnit * 50);
+        uint256 amt = baseUnit * 50;
+        vm.startPrank(address(ladle));
+        base.approve(address(baseJoin), amt);
+        baseJoin.join(address(ladle), amt.u128());
+        vm.stopPrank();
+
+        // Give fyTokens to user for redemption
+        cash(fyToken, user, baseUnit);
+        _afterMaturity();
+
+        uint256 initialFYTokens = fyToken.balanceOf(user);
+
+        vm.prank(user);
+        fyToken.redeem(initialFYTokens, user, user);
+
+        assertEq(fyToken.balanceOf(user), 0);
+        assertApproxEqRel(base.balanceOf(user), initialFYTokens, baseUnit / 10);
+
+    }
+
+    // Need new series id
     function testRollDebtBeforeMaturity() public canSkip {
 
     }
@@ -641,15 +651,13 @@ contract RecipeHarness is HarnessBase {
     /////////////*/
 
     function testLend() public canSkip {
-        uint256 baseSold = baseUnit;
-
-        cash(base, user, baseSold);
+        cash(base, user, baseUnit);
         vm.prank(user);
-        base.approve(address(ladle), baseSold);
+        base.approve(address(ladle), baseUnit);
 
         uint256 poolBaseBalance = pool.getBaseBalance();
 
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseSold));
+        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseUnit));
         batch.push(
             abi.encodeWithSelector(
                 ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
@@ -662,7 +670,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(base.balanceOf(user), 0);
         // TODO: Maybe because of Euler approximation?
         // TODO: Assert as well that the user got between 1.0 and 1.1 fyToken per base
-        assertApproxEqRel(fyToken.balanceOf(user), baseSold, 1e17);
+        assertApproxEqRel(fyToken.balanceOf(user), baseUnit, 1e17);
     }
 
     function testCloseLendBeforeMaturity() public canSkip {
@@ -690,6 +698,7 @@ contract RecipeHarness is HarnessBase {
         assertApproxEqRel(base.balanceOf(user), baseUnit, 1e17);
     }
 
+    // Need different pool addresses
     function testRollLendingBeforeMaturity() public canSkip {
         cash(fyToken, user, baseUnit);
     }
@@ -1052,6 +1061,7 @@ contract RecipeHarness is HarnessBase {
         ladle.batch(batch);
     }
 
+    // Need to add older series and construct some sort of modifier to only work with those
     function testRemoveLiquidityFromDeprecatedStrategy() public canSkip canProvideLiquidity {
         _borrowAndPoolStrategy(user, baseUnit);
     }
@@ -1169,6 +1179,7 @@ contract RecipeHarness is HarnessBase {
     /// ERC1155 ///
     /////////////*/
 
+    // these two
     function testPostERC1155Collateral() public canSkip {
 
     }

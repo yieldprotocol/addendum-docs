@@ -13,13 +13,13 @@ SERIES_STRATEGIES=(\
 # 0x0032FF00028B,0x5dd6DcAE25dFfa0D46A04C9d99b4875044289fB2\ 
 # 0x0138FF00028B,0x4B010fA49E8b673D0682CDeFCF7834328076748C\ 
 0x00A0FF000288,0x861509A3fA7d87FaA0154AAE2CB6C1f92639339A
-0x00A0FF00028B,0xfe2Aba5ba890AF0ee8B6F2d488B1f85C9E7C5643\ 
+# 0x00A0FF00028B,0xfe2Aba5ba890AF0ee8B6F2d488B1f85C9E7C5643\ 
 )
 
 ILK_IDS=(\ 
   0x3030 # ETH \ 
-  0x3031 # DAI \ 
-  0x3032 # USDC \ 
+  # 0x3031 # DAI \ 
+  # 0x3032 # USDC \ 
 # 0x3033 # WBTC \ 
 # 0x3034 # WSTETH \ 
 # 0x3036 # LINK \ 
@@ -36,6 +36,7 @@ ILK_IDS=(\
 # 0x3336 # YSFRAX6MMSASSET \ 
 # 0x3337 # YSFRAX6MJDASSET \ 
 # 0x3338 # CRAB \ 
+  # 0x30A0 # USDT\
 )
 
 # ERC1155
@@ -67,6 +68,12 @@ export RPC="ARBITRUM"
 export NETWORK="ARBITRUM"
 export MOCK=false
 
+# testBorrowUnderlying -> fyTokenInForSharesOut
+# testRepayUnderlyingBeforeMaturity -> fyTokenOutForSharesIn
+# testRepayVaultUnderlyingBeforeMaturity -> sharesInForFYTokenOut
+# testLend -> fyTokenOutForSharesIn
+# testCloseLendBeforeMaturity -> sharesOutForFYTokenIn
+
 for SERIES_STRATEGY in ${SERIES_STRATEGIES[@]}; do
   # echo $SERIES_STRATEGY
   SERIES_ID_=`echo $SERIES_STRATEGY | sed 's/,.*//g'`
@@ -75,6 +82,7 @@ for SERIES_STRATEGY in ${SERIES_STRATEGIES[@]}; do
     echo "SeriesId: " $SERIES_ID_
     echo "IlkId:    " $ILK_ID_
     echo "Strategy: " $STRATEGY_
-    STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -c test/RecipeHarness.t.sol
+    STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -c test/RecipeHarness.t.sol -vvvv -m testBorrowUnderlying
+    # STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ILK_ID=$ILK_ID_ forge test -c test/RecipeHarness.t.sol -vvvv -m testProvideLiquidityByBorrowing
   done
 done
