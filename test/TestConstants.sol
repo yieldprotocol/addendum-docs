@@ -19,6 +19,7 @@ contract TestConstants {
     string public constant UNIT_TESTS = "UNIT_TESTS";
     string public constant MOCK = "MOCK";
     string public constant NETWORK = "NETWORK";
+    string public constant RECTIFY = "RECTIFY";
 
     string public constant TIMELOCK = "TIMELOCK";
     string public constant CAULDRON = "CAULDRON";

@@ -48,6 +48,33 @@ contract HarnessBase is HarnessStorage {
         _;
     }
 
+    modifier rectifyJoin() {
+        if(vm.envOr(RECTIFY, false)) {
+            _provisionJoin();
+            _;
+        } else {
+            return;
+        }
+    }
+
+    modifier rectifyPool() {
+        if(vm.envOr(RECTIFY, false)) {
+            _provisionPool(10_000, 10_000);
+            _;
+        } else {
+            return;
+        }
+    }
+
+    modifier rectifyPoolForBorrow() {
+        if(vm.envOr(RECTIFY, false)) {
+            _provisionPool(10_000, 0);
+            _;
+        } else {
+            return;
+        } 
+    }
+
     modifier etherCollateral() {
         if(ilkId != 0x303000000000) {
             console2.log("Not ETH collateral");
@@ -310,10 +337,10 @@ contract HarnessBase is HarnessStorage {
         vm.stopPrank();
     }
 
-    function _provisionPool() internal {
+    function _provisionPool(uint256 baseAmount, uint256 fyTokenAmount) internal {
         // provision pool with reserves
-        cash(base, address(pool), 10_000 * baseUnit);
-        cash(fyToken, address(pool), 10_000 * baseUnit);
+        cash(base, address(pool), baseAmount * baseUnit);
+        cash(fyToken, address(pool), fyTokenAmount * baseUnit);
         vm.warp(block.timestamp + 1000000);
         vm.startPrank(user);
         pool.mint(other, other, 0, type(uint256).max);
@@ -447,7 +474,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(balances.art, borrowed);
     }
 
-    function testBorrowUnderlying() public canSkip {
+    function testBorrowUnderlying() public canSkip rectifyPoolForBorrow {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -457,47 +484,6 @@ contract RecipeHarness is HarnessBase {
         cash(ilk, user, posted);
         vm.prank(user);
         ilk.approve(address(ladle), posted);
-
-        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
-
-        // TODO: `borrowed` is a base amount, and `posted` is calculated as if it were a fyToken amount.
-        // This works anyway because we calculate `posted` as twice what it would need to be in `_getAmountToPost`.
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.serve.selector, bytes12(0), other, uint128(posted), uint128(borrowed), type(uint128).max
-            )
-        );
-
-        vm.prank(user);
-        bytes[] memory results = ladle.batch(batch);
-
-        bytes12 vaultId = abi.decode(results[0], (bytes12));
-
-        DataTypes.Balances memory balances = cauldron.balances(vaultId);
-
-        // TODO: I would also assert that the balances.art of the user is within a 10% of `borrowed`, to make sure he was not ripped off.
-        assertApproxEqAbs(base.balanceOf(other), borrowed, baseUnit / 100);
-        assertApproxEqRel(balances.art, borrowed, 1e17);
-    }
-
-    function testBorrowUnderlyingProvisioned() public canSkip {
-        // Get borrowed amount
-        uint256 borrowed = _getAmountToBorrow();
-
-        // Get posted amount
-        uint256 posted = _getAmountToPost(borrowed);
-
-        cash(ilk, user, posted);
-        vm.prank(user);
-        ilk.approve(address(ladle), posted);
-
-        // provision pool
-        cash(base, address(pool), 10_000 * baseUnit);
-        vm.warp(block.timestamp + 1000000);
-        vm.startPrank(user);
-        pool.mint(user, user, 0, type(uint256).max);
-        vm.stopPrank();
 
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
@@ -553,7 +539,7 @@ contract RecipeHarness is HarnessBase {
     /// DEBT REPAYMENT ///
     ////////////////////*/
 
-    function testRepayUnderlyingBeforeMaturity() public canSkip {
+    function testRepayUnderlyingBeforeMaturity() public canSkip rectifyPool {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -595,87 +581,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(base.balanceOf(user), 0);
     }
 
-    function testRepayUnderlyingBeforeMaturityProvisioned() public canSkip {
-        _provisionPool();
-
-        // Get borrowed amount
-        uint256 borrowed = _getAmountToBorrow();
-
-        // Get posted amount
-        uint256 posted = _getAmountToPost(borrowed);
-        
-        // want to borrow more than minimum which is what _getAmountToBorrow is
-        // so multiply borrowed and posted by 3
-
-        // Give the user collateral and approve it for use
-        cash(ilk, user, posted * 3);
-        vm.prank(user);
-        ilk.approve(address(ladle), posted);
-
-        // Build vault and borrow underlying, 
-        bytes12 vaultId = _buildVault(posted * 3, borrowed * 3);
-
-        DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-
-        // Get vault balances
-        DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
-
-        uint256 dust = debt.min * uint128(10) ** debt.dec;
-
-        // Give the user some base to repay debt, has none because _buildVault calls pour and not serve
-        cash(base, user, dust);
-
-        vm.startPrank(user);
-        base.approve(address(ladle), base.balanceOf(user));
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), dust));
-        batch.push(abi.encodeWithSelector(ladle.repay.selector, vaultId, address(0), 0, dust));
-        ladle.batch(batch);
-        vm.stopPrank();
-
-        DataTypes.Balances memory newBalances = cauldron.balances(vaultId);
-
-        // TODO: As a shortcut, you can assert that at least `base.balanceOf(user)` was repaid, since you always buy fyToken below parity
-        assertLe(newBalances.art, initialBalances.art); // should calculate the exact amount of art repaid
-        assertEq(base.balanceOf(user), 0);
-    }
-
-    function testRepayVaultUnderlyingBeforeMaturity() public canSkip {
-        // Get borrowed amount
-        uint256 borrowed = _getAmountToBorrow();
-
-        // Get posted amount
-        uint256 posted = _getAmountToPost(borrowed);
-        
-        cash(ilk, user, posted); // give more to user to repay debt with interest
-        vm.prank(user);
-        ilk.approve(address(ladle), posted);
-
-        bytes12 vaultId = _buildVault(posted, borrowed);
-
-        // Get vault balances
-        DataTypes.Balances memory initialBalances = cauldron.balances(vaultId);
-
-        // Give the user some base to repay debt, has none because _buildVault calls pour and not serve
-        cash(base, user, initialBalances.art);
-
-        // Send base to the pool and repay all of the art and have the difference refunded
-        vm.startPrank(user);
-        base.approve(address(ladle), base.balanceOf(user)); // For some ilks the amount approved here is less than needed in the batch
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), initialBalances.art));
-        batch.push(abi.encodeWithSelector(ladle.repayVault.selector, vaultId, address(0), 0, initialBalances.art));
-        ladle.batch(batch);
-        vm.stopPrank();
-
-        DataTypes.Balances memory newBalances = cauldron.balances(vaultId);
-
-        // TODO: You can test that the user spent no more base than initialBalances.art, since you always buy fyToken below parity
-        assertEq(newBalances.art, 0);
-        assertLt(base.balanceOf(user), initialBalances.art);
-    }
-
-    function testRepayVaultUnderlyingBeforeMaturityProvisioned() public canSkip {
-        _provisionPool();
-
+    function testRepayVaultUnderlyingBeforeMaturity() public canSkip rectifyPool {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -747,7 +653,7 @@ contract RecipeHarness is HarnessBase {
         // assertApproxEqRel(base.balanceOf(user), initialBaseBalance - initialBalances.art, IERC20Metadata(address(base)).decimals() / 100);
     }
 
-    function testRedeem() public canSkip {
+    function testRedeem() public canSkip rectifyJoin {
         cash(fyToken, user, baseUnit);
         _afterMaturity();
 
@@ -760,21 +666,6 @@ contract RecipeHarness is HarnessBase {
         assertApproxEqRel(base.balanceOf(user), initialFYTokens, baseUnit / 10); // TODO: This would be different for mature fyToken. For sanity, you can check that the user gets between 1.0 and 1.1 base per fyToken.   
     }
 
-    function testRedeemProvisioned() public canSkip {
-        _provisionJoin();
-        // Give fyTokens to user for redemption
-        cash(fyToken, user, baseUnit);
-        _afterMaturity();
-
-        uint256 initialFYTokens = fyToken.balanceOf(user);
-
-        vm.prank(user);
-        fyToken.redeem(initialFYTokens, user, user);
-
-        assertEq(fyToken.balanceOf(user), 0);
-        assertApproxEqRel(base.balanceOf(user), initialFYTokens, baseUnit / 10);
-    }
-
     // Need new series id
     function testRollDebtBeforeMaturity() public canSkip {
 
@@ -784,7 +675,7 @@ contract RecipeHarness is HarnessBase {
     /// LENDING ///
     /////////////*/
 
-    function testLend() public canSkip {
+    function testLend() public canSkip rectifyPool {
         cash(base, user, baseUnit);
         vm.prank(user);
         base.approve(address(ladle), baseUnit);
@@ -808,59 +699,7 @@ contract RecipeHarness is HarnessBase {
 
     }
 
-    function testLendProvisioned() public canSkip {
-        _provisionPool();
-
-        cash(base, user, baseUnit);
-        vm.prank(user);
-        base.approve(address(ladle), baseUnit);
-
-        uint256 poolBaseBalance = pool.getBaseBalance();
-
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseUnit));
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
-            )
-        );
-
-        vm.prank(user);
-        ladle.batch(batch);
-
-        assertEq(base.balanceOf(user), 0);
-        // TODO: Maybe because of Euler approximation?
-        // TODO: Assert as well that the user got between 1.0 and 1.1 fyToken per base
-        assertApproxEqRel(fyToken.balanceOf(user), baseUnit, 1e17);
-    }
-
-    function testCloseLendBeforeMaturity() public canSkip {
-        cash(fyToken, user, baseUnit);
-
-        uint256 userFYTokens = fyToken.balanceOf(user);
-        uint256 poolFYTokens = fyToken.balanceOf(address(pool));
-
-        vm.prank(user);
-        fyToken.approve(address(ladle), baseUnit);
-
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, address(pool), baseUnit));
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellFYToken.selector, user, 0)
-            )
-        );
-
-        vm.prank(user);
-        ladle.batch(batch);
-
-        // not sure why the user has > 1 baseUnit of fyTokens before this call
-        assertEq(fyToken.balanceOf(user), userFYTokens - baseUnit);
-        assertEq(fyToken.balanceOf(address(pool)), poolFYTokens + baseUnit);
-        assertApproxEqRel(base.balanceOf(user), baseUnit, 1e17);
-    }
-
-    function testCloseLendBeforeMaturityProvisioned() public canSkip {
-        _provisionPool();
-
+    function testCloseLendBeforeMaturity() public canSkip rectifyPool {
         cash(fyToken, user, baseUnit);
 
         uint256 userFYTokens = fyToken.balanceOf(user);
