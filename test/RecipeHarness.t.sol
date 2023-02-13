@@ -51,6 +51,7 @@ contract HarnessBase is HarnessStorage {
     modifier rectifyJoin() {
         if(vm.envOr(RECTIFY, false)) {
             _provisionJoin();
+            console.log("Rectified join");
             _;
         } else {
             return;
@@ -60,6 +61,7 @@ contract HarnessBase is HarnessStorage {
     modifier rectifyPool() {
         if(vm.envOr(RECTIFY, false)) {
             _provisionPool(10_000, 10_000);
+            console.log("Rectified pool");
             _;
         } else {
             return;
@@ -69,6 +71,7 @@ contract HarnessBase is HarnessStorage {
     modifier rectifyPoolForBorrow() {
         if(vm.envOr(RECTIFY, false)) {
             _provisionPool(10_000, 0);
+            console.log("Rectified pool for borrow");
             _;
         } else {
             return;
