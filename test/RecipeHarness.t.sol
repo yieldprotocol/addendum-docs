@@ -100,6 +100,24 @@ contract HarnessBase is HarnessStorage {
         }
     }
 
+    modifier erc1155Collateral() {
+        bytes6[] memory ilks = new bytes6[](3);
+        // March fCash
+        ilks[0] = 0x323900000000;
+        ilks[1] = 0x323500000000;
+        ilks[2] = 0x323600000000;
+
+        for (uint256 i = 0; i < ilks.length; i++) {
+            if (ilkId == ilks[i]) {
+                _;
+            } else {
+                console.log("Not ERC1155 collateral");
+            }
+        }
+
+        return;
+    }
+
     modifier canProvideLiquidity() {
         if(ilkId != baseId) {
             console2.log("Unable to provide liquidity for this ilk-base pair");

@@ -21,16 +21,16 @@ SERIES_STRATEGIES=(\
 )
 
 ILK_IDS=(\ 
-  # 0x3030 # ETH \ 
-  # 0x3031 # DAI \ 
-  # 0x3032 # USDC \ 
-  # 0x3033 # WBTC \ 
-  # 0x3034 # WSTETH \ 
-  # 0x3036 # LINK \ 
-  # 0x3037 # ENS \ 
+  0x3030 # ETH \ 
+  0x3031 # DAI \ 
+  0x3032 # USDC \ 
+  0x3033 # WBTC \ 
+  0x3034 # WSTETH \ 
+  0x3036 # LINK \ 
+  0x3037 # ENS \ 
   # # 0x3039 # YVUSDC \ 
-  # 0x3130 # UNI \ 
-  # 0x3138 # FRAX \ 
+  0x3130 # UNI \ 
+  0x3138 # FRAX \ 
   # 0x3330 # YSDAI6MMSASSET \ 
   # 0x3331 # YSDAI6MJDASSET \ 
   # 0x3332 # YSUSDC6MMSASSET \ 
@@ -51,10 +51,10 @@ ILK_IDS=(\
   # 0x3137 # FUSDC2209 \ 
   # 0x3233 # FDAI2212 \ 
   # 0x3234 # FUSDC2212 \ 
-  0x3235 # FDAI2303 \ 
-  0x3236 # FUSDC2303 \ 
+  # 0x3235 # FDAI2303 \ 
+  # 0x3236 # FUSDC2303 \ 
   # 0x3238 # FETH2212 \ 
-  0x3239 # FETH2303 \ 
+  # 0x3239 # FETH2303 \ 
 )
 
 # Not ilks
@@ -85,7 +85,7 @@ for SERIES_STRATEGY in ${SERIES_STRATEGIES[@]}; do
     echo "IlkId:          " $ILK_ID_
     echo "Strategy:       " $STRATEGY_
     echo "Roll Pool:      " $ROLL_POOL_
-    # STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ROLL_SERIES_ID=$ROLL_SERIES_ID_ ILK_ID=$ILK_ID_ ROLL_POOL=$ROLL_POOL_ forge test -c test/RecipeHarness.t.sol
+    STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ROLL_SERIES_ID=$ROLL_SERIES_ID_ ILK_ID=$ILK_ID_ ROLL_POOL=$ROLL_POOL_ forge test -c test/RecipeHarness.t.sol
 
     # For ERC1155 tests 
     # STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ROLL_SERIES_ID=$ROLL_SERIES_ID_ ILK_ID=$ILK_ID_ ROLL_POOL=$ROLL_POOL_ forge test -c test/RecipeHarness.t.sol -vvvv --match-test testPostERC1155Collateral

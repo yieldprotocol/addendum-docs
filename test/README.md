@@ -46,3 +46,21 @@ The currently live March series uses the now deprecated V1 strategies. With the 
 
 This means that testing for rolling liquidity from a deprecated strategy can only be done for those series still using 
 V1 strategies such as ETH, DAI, USDC, and FRAX for the March series.
+
+### ERC1155 Collateral
+
+This section of the harness could use improvement. 
+
+The tests for providing and withdrawing ERC1155 collateral must run separately. Simply uncomment the lines in the harness like so to proceed: 
+
+```
+# STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ROLL_SERIES_ID=$ROLL_SERIES_ID_ ILK_ID=$ILK_ID_ ROLL_POOL=$ROLL_POOL_ forge test -c test/RecipeHarness.t.sol
+
+# For ERC1155 tests 
+STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ROLL_SERIES_ID=$ROLL_SERIES_ID_ ILK_ID=$ILK_ID_ ROLL_POOL=$ROLL_POOL_ forge test -c test/RecipeHarness.t.sol -vvvv --match-test testPostERC1155Collateral
+STRATEGY=$STRATEGY_ SERIES_ID=$SERIES_ID_ ROLL_SERIES_ID=$ROLL_SERIES_ID_ ILK_ID=$ILK_ID_ ROLL_POOL=$ROLL_POOL_ forge test -c test/RecipeHarness.t.sol -vvvv --match-test testWithdrawERC1155Collateral
+```
+
+This is because the modifier `erc1155Collateral` will check to see if the current ilkId is ERC1155 and will skip it otherwise.
+
+Thus, it is important to only run either ERC20 or ERC1155 ilks at a time. 
