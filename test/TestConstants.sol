@@ -8,6 +8,7 @@ contract TestConstants {
     bytes6 public constant RATE = 0x524154450000;
 
     string public constant SERIES_ID = "SERIES_ID";
+    string public constant ROLL_SERIES_ID = "ROLL_SERIES_ID";
     string public constant ILK_ID = "ILK_ID";
 
     string public constant CI = "CI";
@@ -26,7 +27,9 @@ contract TestConstants {
     string public constant LADLE = "LADLE";
     string public constant REPAYFROMLADLEMODULE = "REPAYFROMLADLEMODULE";
     string public constant WRAPETHERMODULE = "WRAPETHERMODULE";
+    string public constant TRANSFER1155MODULE = "TRANSFER1155MODULE";
     string public constant STRATEGY = "STRATEGY";
+    string public constant ROLL_POOL = "ROLL_POOL";
 
     mapping(string => mapping(string => address)) public addresses;
 
@@ -36,6 +39,7 @@ contract TestConstants {
         addresses[MAINNET][LADLE] = 0x6cB18fF2A33e981D1e38A663Ca056c0a5265066A;
         addresses[MAINNET][REPAYFROMLADLEMODULE] = 0xd47a7473C83a1cC145407e82Def5Ae15F8b338c2;
         addresses[MAINNET][WRAPETHERMODULE] = 0x22768FCaFe7BB9F03e31cb49823d1Ece30C0b8eA;
+        addresses[MAINNET][TRANSFER1155MODULE] = 0x97f1d43A217aDD678bB6Dcd3C5D51F40b6729d06;
         addresses[ARBITRUM][TIMELOCK] = 0xd0a22827Aed2eF5198EbEc0093EA33A4CD641b6c;
         addresses[ARBITRUM][CAULDRON] = 0x23cc87FBEBDD67ccE167Fa9Ec6Ad3b7fE3892E30;
         addresses[ARBITRUM][LADLE] = 0x16E25cf364CeCC305590128335B8f327975d0560;
