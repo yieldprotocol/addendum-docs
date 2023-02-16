@@ -2,10 +2,9 @@
 pragma solidity >=0.8.13;
 
 import "forge-std/Test.sol";
-import { IERC20 } from "@yield-protocol/utils-v2/contracts/token/IERC20.sol";
+import {IERC20} from "@yield-protocol/utils-v2/contracts/token/IERC20.sol";
 
 contract TestExtensions is Test {
-
     mapping(string => uint256) tracked;
 
     function track(string memory id, uint256 amount) public {
@@ -48,7 +47,7 @@ contract TestExtensions is Test {
         deal(address(token), to, start + amount);
     }
 
-    function equal(string memory a, string memory b) public pure returns(bool) {
+    function equal(string memory a, string memory b) public pure returns (bool) {
         return keccak256(abi.encodePacked(a)) == keccak256(abi.encodePacked(b));
     }
 }
