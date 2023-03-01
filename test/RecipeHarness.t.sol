@@ -4,42 +4,39 @@ pragma solidity >=0.8.13;
 import "lib/forge-std/src/console.sol";
 import "lib/forge-std/src/console2.sol";
 
-import {CastBytes32Bytes6}      from "lib/yield-utils-v2/contracts/cast/CastBytes32Bytes6.sol";
-import {CastU256I128}           from "lib/yield-utils-v2/contracts/cast/CastU256I128.sol";
-import {CastU256U128}           from "lib/yield-utils-v2/contracts/cast/CastU256U128.sol";
-import {CastU128I128}           from "lib/yield-utils-v2/contracts/cast/CastU128I128.sol";
+import {Cast}                   from "lib/yield-utils-v2/src/utils/Cast.sol";
 
-import {DataTypes}              from "lib/vault-v2/packages/foundry/contracts/interfaces/DataTypes.sol";
+import {DataTypes}              from "lib/vault-v2/src/interfaces/DataTypes.sol";
 
-import {IERC20}                 from "lib/yield-utils-v2/contracts/token/IERC20.sol";
-import {IERC20Metadata}         from "lib/yield-utils-v2/contracts/token/IERC20Metadata.sol";
-import {IERC2612}               from "lib/yield-utils-v2/contracts/token/IERC2612.sol";
-import {ERC20Permit}            from "lib/yield-utils-v2/contracts/token/ERC20Permit.sol";
+import {IERC20}                 from "lib/yield-utils-v2/src/token/IERC20.sol";
+import {IERC20Metadata}         from "lib/yield-utils-v2/src/token/IERC20Metadata.sol";
+import {IERC2612}               from "lib/yield-utils-v2/src/token/IERC2612.sol";
+import {ERC20Permit}            from "lib/yield-utils-v2/src/token/ERC20Permit.sol";
 
-import {ICauldron}              from "lib/vault-v2/packages/foundry/contracts/interfaces/ICauldron.sol";
-import {IFYToken}               from "lib/vault-v2/packages/foundry/contracts/interfaces/IFYToken.sol";
-import {IJoin}                  from "lib/vault-v2/packages/foundry/contracts/interfaces/IJoin.sol";
-import {ILadle}                 from "lib/vault-v2/packages/foundry/contracts/interfaces/ILadle.sol";
-import {RepayFromLadleModule}   from "lib/vault-v2/packages/foundry/contracts/modules/RepayFromLadleModule.sol";
-import {WrapEtherModule}        from "lib/vault-v2/packages/foundry/contracts/modules/WrapEtherModule.sol";
-import {Transfer1155Module}     from "lib/vault-v2/packages/foundry/contracts/other/notional/Transfer1155Module.sol";
-import {ERC1155}                from "lib/vault-v2/packages/foundry/contracts/other/notional/ERC1155.sol";
+import {ICauldron}              from "lib/vault-v2/src/interfaces/ICauldron.sol";
+import {IFYToken}               from "lib/vault-v2/src/interfaces/IFYToken.sol";
+import {IJoin}                  from "lib/vault-v2/src/interfaces/IJoin.sol";
+import {ILadle}                 from "lib/vault-v2/src/interfaces/ILadle.sol";
+import {RepayFromLadleModule}   from "lib/vault-v2/src/modules/RepayFromLadleModule.sol";
+import {WrapEtherModule}        from "lib/vault-v2/src/modules/WrapEtherModule.sol";
+import {Transfer1155Module}     from "lib/vault-v2/src/other/notional/Transfer1155Module.sol";
+import {ERC1155}                from "lib/vault-v2/src/other/notional/ERC1155.sol";
 
 import {IPool}                  from "lib/yieldspace-tv/src/interfaces/IPool.sol";
 import {Pool}                   from "lib/yieldspace-tv/src/Pool/Pool.sol";
-import {IStrategy}              from "lib/strategy-v2/contracts/interfaces/IStrategy.sol";
-import {Strategy}               from "lib/strategy-v2/contracts/Strategy.sol";
+import {IStrategy}              from "lib/strategy-v2/src/interfaces/IStrategy.sol";
+import {Strategy}               from "lib/strategy-v2/src/Strategy.sol";
 
 import {HarnessStorage}         from "./HarnessStorage.sol";
 
-using CastBytes32Bytes6 for bytes32;
-using CastU256I128 for uint256;
-using CastU256U128 for uint256;
-using CastU128I128 for uint128;
+using Cast for uint256;
+using Cast for uint128;
+using Cast for bytes32;
 
 /// @dev This test harness tests that basic functions on the Ladle are functional.
 
 contract HarnessBase is HarnessStorage {
+
     modifier canSkip() {
         if (!ilkEnabled) {
             console2.log("Ilk not enabled for series, skipping test");
@@ -155,7 +152,7 @@ contract HarnessBase is HarnessStorage {
             baseJoin = IJoin(ladle.joins(baseId));
             pool = IPool(ladle.pools(seriesId));
 
-            // mock v2 strategy used with v1 strategy contracts
+            // mock v2 strategy used with v1 strategy src
             newStrategy = new Strategy("v2Mock", "", fyToken);
             // used for liquidity rolling recipes
             oppositePool = IPool(vm.envAddress(ROLL_POOL));

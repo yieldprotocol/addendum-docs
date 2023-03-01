@@ -3,20 +3,20 @@ pragma solidity >=0.8.13;
 
 import "lib/forge-std/src/Test.sol";
 
-import {IERC20}                 from "lib/yield-utils-v2/contracts/token/IERC20.sol";
+import {IERC20}                 from "lib/yield-utils-v2/src/token/IERC20.sol";
 
-import {ICauldron}              from "lib/vault-v2/packages/foundry/contracts/interfaces/ICauldron.sol";
-import {IFYToken}               from "lib/vault-v2/packages/foundry/contracts/interfaces/IFYToken.sol";
-import {IJoin}                  from "lib/vault-v2/packages/foundry/contracts/interfaces/IJoin.sol";
-import {ILadle}                 from "lib/vault-v2/packages/foundry/contracts/interfaces/ILadle.sol";
-import {RepayFromLadleModule}   from "lib/vault-v2/packages/foundry/contracts/modules/RepayFromLadleModule.sol";
-import {WrapEtherModule}        from "lib/vault-v2/packages/foundry/contracts/modules/WrapEtherModule.sol";
-import {Transfer1155Module}     from "lib/vault-v2/packages/foundry/contracts/other/notional/Transfer1155Module.sol";
-import {ERC1155}                from "lib/vault-v2/packages/foundry/contracts/other/notional/ERC1155.sol";
+import {ICauldron}              from "lib/vault-v2/src/interfaces/ICauldron.sol";
+import {IFYToken}               from "lib/vault-v2/src/interfaces/IFYToken.sol";
+import {IJoin}                  from "lib/vault-v2/src/interfaces/IJoin.sol";
+import {ILadle}                 from "lib/vault-v2/src/interfaces/ILadle.sol";
+import {RepayFromLadleModule}   from "lib/vault-v2/src/modules/RepayFromLadleModule.sol";
+import {WrapEtherModule}        from "lib/vault-v2/src/modules/WrapEtherModule.sol";
+import {Transfer1155Module}     from "lib/vault-v2/src/other/notional/Transfer1155Module.sol";
+import {ERC1155}                from "lib/vault-v2/src/other/notional/ERC1155.sol";
 
 import {IPool}                  from "lib/yieldspace-tv/src/interfaces/IPool.sol";
-import {IStrategy}              from "lib/strategy-v2/contracts/interfaces/IStrategy.sol";
-import {Strategy}               from "lib/strategy-v2/contracts/Strategy.sol";
+import {IStrategy}              from "lib/strategy-v2/src/interfaces/IStrategy.sol";
+import {Strategy}               from "lib/strategy-v2/src/Strategy.sol";
 
 import {TestConstants}          from "./TestConstants.sol";
 import {TestExtensions}         from "./TestExtensions.sol";

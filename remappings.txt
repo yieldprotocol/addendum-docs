@@ -1,12 +1,13 @@
-erc3156=lib/strategy-v2/lib/vault-v2/packages/foundry/lib/ERC3156
+erc3156=lib/strategy-v2/lib/vault-v2/lib/ERC3156
 
-forge-std/=lib/strategy-v2/lib/vault-v2/packages/foundry/lib/forge-std/src/
-lib/forge-std/src/=lib/strategy-v2/lib/vault-v2/packages/foundry/lib/forge-std/src/
-lib/yield-utils-v2=lib/strategy-v2/lib/vault-v2/packages/foundry/lib/yield-utils-v2
-lib/vault-v2/packages/foundry=lib/strategy-v2/lib/vault-v2/packages/foundry
-lib/yieldspace-tv=lib/strategy-v2/lib/vault-v2/packages/foundry/lib/yieldspace-tv
+lib/vault-v2/=lib/strategy-v2/lib/vault-v2/
+forge-std/=lib/strategy-v2/lib/forge-std/src/
+ds-test/=lib/strategy-v2/lib/forge-std/lib/ds-test/src/
+lib/forge-std/src/=lib/strategy-v2/lib/forge-std/src/
+lib/yield-utils-v2/=lib/strategy-v2/lib/yield-utils-v2/
+lib/yieldspace-tv/=lib/strategy-v2/lib/yieldspace-tv/
 
-@yield-protocol/utils-v2=lib/strategy-v2/lib/vault-v2/packages/foundry/lib/yield-utils-v2
-@yield-protocol/vault-v2=lib/strategy-v2/lib/vault-v2/packages/foundry
-@yield-protocol/yieldspace-tv=lib/strategy-v2/lib/vault-v2/packages/foundry/lib/yieldspace-tv
-@yield-protocol/strategy-v2=lib/strategy-v2
+@yield-protocol/utils-v2/=lib/strategy-v2/lib/yield-utils-v2/
+@yield-protocol/vault-v2/=lib/strategy-v2/lib/vault-v2/
+@yield-protocol/yieldspace-tv/=lib/strategy-v2/lib/yieldspace-tv/
+@yield-protocol/strategy-v2/=lib/strategy-v2/
