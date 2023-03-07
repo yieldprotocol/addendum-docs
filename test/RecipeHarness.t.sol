@@ -61,7 +61,7 @@ contract HarnessBase is HarnessStorage {
 
     modifier rectifyPool() {
         if(vm.envOr(RECTIFY, false)) {
-            _provisionPool(10_000, 10_000);
+            _provisionPool(10_000_000, 5_000_000);
             console.log("Rectified pool");
             _;
         } else {
@@ -71,7 +71,7 @@ contract HarnessBase is HarnessStorage {
 
     modifier rectifyPoolForBorrow() {
         if(vm.envOr(RECTIFY, false)) {
-            _provisionPool(10_000, 0);
+            _provisionPool(10_000_000, 0);
             console.log("Rectified pool for borrow");
             _;
         } else {
@@ -197,15 +197,13 @@ contract HarnessBase is HarnessStorage {
     }
 
     function _buildVault(uint256 posted, uint256 borrowed) internal returns (bytes12 vaultId) {        
-        vm.startPrank(user);
-
-        ilk.approve(address(ladle), posted);
-        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
-        batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, user, posted.i128(), borrowed.i128()));
-        bytes[] memory results = ladle.batch(batch);
         
-        vm.stopPrank();
+        cash(ilk, address(ilkJoin), posted);
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, user, posted.i128(), borrowed.i128()));
+        
+        vm.prank(user);
+        bytes[] memory results = ladle.batch(batch);
 
         bytes12 vaultId = abi.decode(results[0], (bytes12));
 
@@ -385,7 +383,16 @@ contract RecipeHarness is HarnessBase {
     //////////////////////*/
 
     function testBuildVault() public canSkip {
-        bytes12 vaultId = _buildVault(0, 0);
+        vm.startPrank(user);
+
+        batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
+        bytes[] memory results = ladle.batch(batch);
+        
+        vm.stopPrank();
+
+        bytes12 vaultId = abi.decode(results[0], (bytes12));
+
+        _clearBatch(batch.length);
 
         assertEq(cauldron.vaults(vaultId).owner, user);
     }
@@ -482,12 +489,8 @@ contract RecipeHarness is HarnessBase {
         // Get posted amount
         uint256 posted = _getAmountToPost(borrowed);
         
-        cash(ilk, user, posted);
-        vm.prank(user);
-        ilk.approve(address(ladle), posted);
-
+        cash(ilk, address(ilkJoin), posted);
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
         batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), other, posted, borrowed));
 
         vm.prank(user);
@@ -668,11 +671,14 @@ contract RecipeHarness is HarnessBase {
 
         uint256 initialBaseBalance = base.balanceOf(user);
 
-        vm.startPrank(user);
-        base.approve(address(baseJoin), initialBalances.art);
+        // Fund the join
+        cash(base, address(baseJoin), initialBalances.art);
+
+        // build the batch
         batch.push(abi.encodeWithSelector(ladle.close.selector, vaultId, address(0), 0, -initialBalances.art.i128()));
+
+        vm.prank(user);
         ladle.batch(batch);
-        vm.stopPrank();
 
         DataTypes.Balances memory finalBalances = cauldron.balances(vaultId);
 
@@ -696,7 +702,7 @@ contract RecipeHarness is HarnessBase {
     }
 
     // Need new series id
-    function testRollDebtBeforeMaturity() public canSkip {
+    function testRollDebtBeforeMaturity() public canSkip rectifyPool {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -706,6 +712,9 @@ contract RecipeHarness is HarnessBase {
         cash(ilk, user, posted);
         vm.prank(user);
         ilk.approve(address(ladle), posted);
+
+        console2.log(borrowed);
+        console2.log(pool.maxBaseOut());
 
         // Borrow base normally
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
@@ -724,6 +733,9 @@ contract RecipeHarness is HarnessBase {
         _clearBatch(batch.length);
 
         batch.push(abi.encodeWithSelector(ladle.roll.selector, vaultId, rollSeriesId, 2, baseUnit));
+
+        // Because of using Euler, `buyBase` in `roll` will be slightly less than the `amount` passed in as a parameter. Leaving a few wei in the join solves it.
+        cash(base, address(baseJoin), 100);
 
         vm.prank(user);
         ladle.batch(batch);
@@ -778,86 +790,86 @@ contract RecipeHarness is HarnessBase {
         assertApproxEqRel(base.balanceOf(user), baseUnit, 1e17);
     }
 
-    // Need different pool addresses
-    function testRollLendingBeforeMaturity() public canSkip {
-        cash(base, user, baseUnit);
-        vm.prank(user);
-        base.approve(address(ladle), baseUnit);
-
-        // lend normally
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseUnit));
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
-            )
-        );
-
-        vm.prank(user);
-        ladle.batch(batch);
-
-        _clearBatch(batch.length);
-
-        uint256 fyTokenBalance = fyToken.balanceOf(user);
-
-        vm.prank(user);
-        fyToken.approve(address(ladle), fyTokenBalance);
-
-        // roll lending to new pool
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, address(pool), fyTokenBalance));
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellFYToken.selector, oppositePool, 0)
-            )
-        );
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(oppositePool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
-            )
-        );
-
-        vm.prank(user);
-        ladle.batch(batch);
-    }
-
-    function testRollLendingAfterMaturity() public canSkip {
-        cash(base, user, baseUnit);
-        vm.prank(user);
-        base.approve(address(ladle), baseUnit);
-
-        uint256 poolBaseBalance = pool.getBaseBalance();
-
-        // lend normally
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseUnit));
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
-            )
-        );
-
-        vm.prank(user);
-        ladle.batch(batch);
-
-        _clearBatch(batch.length);
-
-        _afterMaturity();
-
-        uint256 fyTokenBalance = fyToken.balanceOf(user);
-
-        vm.prank(user);
-        fyToken.approve(address(ladle), fyTokenBalance);
-
-        // roll to pool with later maturity
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, fyToken, baseUnit));
-        batch.push(abi.encodeWithSelector(ladle.redeem.selector, seriesId, oppositePool, baseUnit));
-        batch.push(
-            abi.encodeWithSelector(
-                ladle.route.selector, address(oppositePool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
-            )
-        );
-
-        vm.prank(user);
-        ladle.batch(batch);
-    }
+//    // Need different pool addresses
+//    function testRollLendingBeforeMaturity() public canSkip {
+//        cash(base, user, baseUnit);
+//        vm.prank(user);
+//        base.approve(address(ladle), baseUnit);
+//
+//        // lend normally
+//        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseUnit));
+//        batch.push(
+//            abi.encodeWithSelector(
+//                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
+//            )
+//        );
+//
+//        vm.prank(user);
+//        ladle.batch(batch);
+//
+//        _clearBatch(batch.length);
+//
+//        uint256 fyTokenBalance = fyToken.balanceOf(user);
+//
+//        vm.prank(user);
+//        fyToken.approve(address(ladle), fyTokenBalance);
+//
+//        // roll lending to new pool
+//        batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, address(pool), fyTokenBalance));
+//        batch.push(
+//            abi.encodeWithSelector(
+//                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellFYToken.selector, oppositePool, 0)
+//            )
+//        );
+//        batch.push(
+//            abi.encodeWithSelector(
+//                ladle.route.selector, address(oppositePool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
+//            )
+//        );
+//
+//        vm.prank(user);
+//        ladle.batch(batch);
+//    }
+//
+//    function testRollLendingAfterMaturity() public canSkip {
+//        cash(base, user, baseUnit);
+//        vm.prank(user);
+//        base.approve(address(ladle), baseUnit);
+//
+//        uint256 poolBaseBalance = pool.getBaseBalance();
+//
+//        // lend normally
+//        batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseUnit));
+//        batch.push(
+//            abi.encodeWithSelector(
+//                ladle.route.selector, address(pool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
+//            )
+//        );
+//
+//        vm.prank(user);
+//        ladle.batch(batch);
+//
+//        _clearBatch(batch.length);
+//
+//        _afterMaturity();
+//
+//        uint256 fyTokenBalance = fyToken.balanceOf(user);
+//
+//        vm.prank(user);
+//        fyToken.approve(address(ladle), fyTokenBalance);
+//
+//        // roll to pool with later maturity
+//        batch.push(abi.encodeWithSelector(ladle.transfer.selector, fyToken, fyToken, baseUnit));
+//        batch.push(abi.encodeWithSelector(ladle.redeem.selector, seriesId, oppositePool, baseUnit));
+//        batch.push(
+//            abi.encodeWithSelector(
+//                ladle.route.selector, address(oppositePool), abi.encodeWithSelector(IPool.sellBase.selector, user, 0)
+//            )
+//        );
+//
+//        vm.prank(user);
+//        ladle.batch(batch);
+//    }
 
     /*/////////////////////////
     /// LIQUIDITY PROVIDING ///

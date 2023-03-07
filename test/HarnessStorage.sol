@@ -41,6 +41,7 @@ contract HarnessStorage is Test, TestConstants, TestExtensions {
     IFYToken fyToken;
     IERC20 ilk;
     IERC20 base;
+    IERC20 shares;
     IJoin ilkJoin;
     IJoin baseJoin;
     IPool pool;
@@ -51,6 +52,7 @@ contract HarnessStorage is Test, TestConstants, TestExtensions {
     uint256 fyTokenUnit;
     uint256 ilkUnit;
     uint256 baseUnit;
+    uint256 sharesUnit;
     uint256 poolUnit;
 
     bytes[] batch;
