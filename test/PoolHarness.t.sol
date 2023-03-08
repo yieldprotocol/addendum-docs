@@ -84,16 +84,40 @@ abstract contract ZeroState is HarnessStorage {
         (amountQuote,) = oracle.peek(baseId, quoteId, amountBase);
     }
 
-//    function _provisionPool(uint256 baseAmount, uint256 fyTokenAmount) internal {
-//        // provision pool with reserves
-//        cash(base, address(pool), baseAmount * baseUnit);
-//        cash(fyToken, address(pool), fyTokenAmount * baseUnit);
-//        vm.warp(block.timestamp + 1000000);
-//        vm.startPrank(user);
-//        pool.mint(other, other, 0, type(uint256).max);
-//        pool.sellFYToken(other, 0);
-//        vm.stopPrank();
-//    }
+    function _addLiquidity(bytes6 denomination, uint256 amount) internal {
+        uint256 baseIn = _convert(denomination, baseId, amount);
+
+        // We get the reserves, assuming they don't differ much from the cache.
+        // We can work in base, since it will be converted internally.
+        uint256 baseReserves = pool.getBaseBalance();
+        uint256 fyTokenReserves = pool.getFYTokenBalance() - pool.totalSupply();
+
+        // We calculate the expected amount of fyToken needed
+        uint256 fyTokenIn = fyTokenReserves * baseIn / baseReserves;
+
+        // Transfer the base and fyToken to the pool. Transfer a 10% more base than needed, to avoid rounding issues.
+        cash(base, address(pool), baseIn * 11 / 10);
+        cash(fyToken, address(pool), fyTokenIn);
+
+        // We add liquidity
+        pool.mint(user, user, 0, type(uint256).max);
+    }
+
+    function _sellFYToken(bytes6 denomination, uint256 amount) internal {
+        uint256 fyTokenIn = _convert(denomination, baseId, amount); // We are approximating the fyToken price to 1:1
+
+        // We sell fyToken
+        cash(fyToken, address(pool), fyTokenIn);
+        pool.sellFYToken(user, 0);
+    }
+
+    function _sellBase(bytes6 denomination, uint256 amount) internal {
+        uint256 baseIn = _convert(denomination, baseId, amount);
+
+        // We sell base
+        cash(base, address(pool), baseIn);
+        pool.sellBase(user, 0);
+    }
 }
 
 contract ZeroStateTest is ZeroState {
@@ -123,6 +147,18 @@ contract ZeroStateTest is ZeroState {
         assertTrue(pool.getFYTokenBalance() - pool.totalSupply() > 0);
     }
 
+    // Log out the max base in
+    function testMaxBaseIn() public {
+        uint256 maxBaseIn = pool.maxBaseIn(); // If this fails, selling a tiny amount of fyToken to the pool should fix it
+        console2.log("maxBaseIn: ", maxBaseIn);
+    }
+
+    // Log out the max fyToken out
+    function testMaxFYTokenOut() public {
+        uint256 maxFYTokenOut = pool.maxFYTokenOut(); // If this fails, selling a tiny amount of fyToken to the pool should fix it
+        console2.log("maxFYTokenOut: ", maxFYTokenOut);
+    }
+    
     // Test that we can add liquidity
     function testAddLiquidity() public {
 
@@ -200,23 +236,7 @@ abstract contract WithLiquidity is ZeroState {
     function setUp() public virtual override {
         super.setUp();
         
-        // We will add the equivalent of 1M DAI
-        uint256 baseIn = _convert(DAI, baseId, 1e24);
-
-        // We get the reserves, assuming they don't differ much from the cache.
-        // We can work in base, since it will be converted internally.
-        uint256 baseReserves = pool.getBaseBalance();
-        uint256 fyTokenReserves = pool.getFYTokenBalance() - pool.totalSupply();
-
-        // We calculate the expected amount of fyToken needed
-        uint256 fyTokenIn = fyTokenReserves * baseIn / baseReserves;
-
-        // Transfer the base and fyToken to the pool. Transfer a 10% more base than needed, to avoid rounding issues.
-        cash(base, address(pool), baseIn * 11 / 10);
-        cash(fyToken, address(pool), fyTokenIn);
-
-        // We add liquidity
-        pool.mint(user, user, 0, type(uint256).max);
+        _addLiquidity(DAI, 1e24);
     }
 }
 
