@@ -5,7 +5,7 @@
                                     ||||                   |                   ||||
                                     ||||                   |                   ||||
                                     ||||      Yield        |   "Recipes        ||||
-                                    ||||                   |   made with love  ||||
+                                    ||||  Variable Rate    |   made with love  ||||
                                     ||||     COOKBOOK      |   just like mama  ||||
                                     ||||                   |   used to make"   ||||
                                     ||||                   |                   ||||
@@ -30,12 +30,11 @@
 - [Post ERC20 collateral (Join Approval)](#post-erc20-collateral-join-approval)
 - [Post ERC20 collateral (Ladle Approval)](#post-erc20-collateral-ladle-approval)
 - [Withdraw ERC20 collateral](#withdraw-erc20-collateral)
-- [Post ERC20 collateral and borrow underlying](#post-erc20-collateral-and-borrow-underlying)
 
 [Debt Repayment](#debt-repayment)
 
-- [Repay with underlying](#repay-with-underlying)
-- [Repay a whole vault with underlying](#repay-a-whole-vault-with-underlying)
+- [Repay with base](#repay-with-base)
+- [Repay a whole vault with base](#repay-a-whole-vault-with-base)
 
 [Lending](#lending)
 
@@ -164,7 +163,7 @@ This batch adds an ERC20 as collateral to a vault. It can be combined with previ
 |Param | Description|
 |--------------|------------------------------------------------------------------------------------|
 | `ilk` | Contract for the collateral being added to the vault. |
-| `ilkJoin` | Contract holding ilk for Yield v2. |
+| `ilkJoin` | Contract holding ilk for Variable Rate. |
 | `posted` | Amount of collateral being deposited. |
 | `deadline` | Validity of the off-chain signature, as an unix time. |
 | `v, r, s` | Off-chain signature. |
@@ -187,11 +186,11 @@ This batch adds an ERC20 as collateral to a vault. If the ladle already has the 
 | Param      | Description                                                                                      |
 | ---------- | ------------------------------------------------------------------------------------------------ |
 | `ilk`      | Contract for the collateral being added to the vault.                                            |
-| `ladle`    | Ladle for Yield v2.                                                                              |
+| `ladle`    | Ladle for Variable Rate.                                                                         |
 | `posted`   | Amount of collateral being deposited.                                                            |
 | `deadline` | Validity of the off-chain signature, as an unix time.                                            |
 | `v, r, s`  | Off-chain signature.                                                                             |
-| `ilkJoin`  | Contract holding ilk for Yield v2.                                                               |
+| `ilkJoin`  | Contract holding ilk for Variable Rate.                                                          |
 | `vaultId`  | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.    |
 | `ignored`  | Receiver of any tokens produced by pour, which is not producing any in this batch.               |
 | `0`        | Amount of debt to add to the vault, and base to send to the receiver of pour. None in this case. |
@@ -219,7 +218,7 @@ This batch removes an amount of an ERC20 collateral from a vault. Destroying the
 
 ## Debt Repayment
 
-### Repay with underlying
+### Repay with base
 
 This batch will use a precise amount of base to repay debt in a vault. If there isn’t enough debt to repay, the function will revert.
 
@@ -234,7 +233,7 @@ Combine with a base permit for the ladle if not present.
 
 | Param              | Description                                            |
 | ------------------ | ------------------------------------------------------ |
-| `base`             | Contract for the underlying tokens.                    |
+| `base`             | Contract for the base tokens.                          |
 | `ladle`            | Ladle for Variable rate.                               |
 | `join`             | Join for the base.                                     |
 | `debtRepaidInBase` | Amount of base that the user will spend repaying debt. |
@@ -295,7 +294,7 @@ This batch adds Ether as collateral to a vault. It can be combined with previous
 
 | Param     | Description                                                                                      |
 | --------- | ------------------------------------------------------------------------------------------------ |
-| `ethId`   | Yield v2 identifier for Ether. Probably `ETH` converted to bytes6.                               |
+| `ethId`   | Variable Rate identifier for Ether. Probably `ETH` converted to bytes6.                          |
 | `vaultId` | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.    |
 | `posted`  | Amount of collateral being deposited.                                                            |
 | `ignored` | Receiver of any tokens produced by pour, which is not producing any in this batch.               |
