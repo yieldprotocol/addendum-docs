@@ -10,7 +10,7 @@ import {IFYToken}               from "lib/vault-v2/packages/foundry/contracts/in
 import {IJoin}                  from "lib/vault-v2/packages/foundry/contracts/interfaces/IJoin.sol";
 import {ILadle}                 from "lib/vault-v2/packages/foundry/contracts/interfaces/ILadle.sol";
 import {RepayFromLadleModule}   from "lib/vault-v2/packages/foundry/contracts/modules/RepayFromLadleModule.sol";
-import {WrapEtherModule}        from "lib/vault-v2/packages/foundry/contracts/modules/WrapEtherModule.sol";
+import {WrapEtherModule}        from "lib/vault-v2/packages/foundry/contracts/other/ether/WrapEtherModule.sol";
 import {Transfer1155Module}     from "lib/vault-v2/packages/foundry/contracts/other/notional/Transfer1155Module.sol";
 import {ERC1155}                from "lib/vault-v2/packages/foundry/contracts/other/notional/ERC1155.sol";
 
