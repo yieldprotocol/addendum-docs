@@ -22,8 +22,6 @@
 
 - [Build a vault](#build-a-vault)
 - [Destroy a vault](#destroy-a-vault)
-- [Merge two vaults into one](#merge-two-vaults-into-one)
-- [Split a vault into two](#split-a-vault-into-two)
 
 [Collateral and Borrowing](#collateral-and-borrowing)
 
@@ -114,44 +112,6 @@ This action will destroy a vault, provided it has no debt or collateral. Combine
 ```
 
 `vaultId`: Vault to destroy.
-
-### Merge two vaults into one
-
-This batch will combine two vaults of the same base and ilk into one, adding their debt and collateral.
-
-```
-  await ladle.batch([
-      ladle.stirAction(vaultId1, vaultId2, collateral, debt),
-      ladle.destroyAction(vaultId1),
-  ])
-```
-
-| Param         | Description                                         |
-| ------------- | --------------------------------------------------- |
-| `vaultId1`    | First vault to merge. This vault will be destroyed. |
-| `vaultId2`    | Second vault to merge.                              |
-| `collateral ` | Collateral amount in the first vault                |
-| `debt`        | Debt amount in the first vault in base terms.       |
-
-### Split a vault into two
-
-This batch will split part of the debt and collateral of one vault into a new vault.
-
-```
-  await ladle.batch([
-      ladle.buildAction(baseId, ilkId, 0),
-      ladle.stirAction(vaultId, 0, collateral, debt),
-  ])
-```
-
-| Param         | Description                                                         |
-| ------------- | ------------------------------------------------------------------- |
-| `baseId`      | Base for the vault we are splitting debt from.                      |
-| `ilkId`       | Collateral for the vault that we are splitting collateral from.     |
-| `vaultId`     | Vault to split debt and collateral from.                            |
-| `0`           | Indicates the second vault will be built as a result of this batch. |
-| `collateral ` | Collateral amount in the first vault                                |
-| `debt`        | Debt amount in the first vault in base terms.                       |
 
 ## Collateral and borrowing
 
@@ -277,6 +237,17 @@ Lending is depositing base into joins for vyTokens. The user will receive vyToke
   ])
 ```
 
+### Close
+
+Closing a lending position is burning the vyTokens to receive the base back. The user will receive base in exchange. The join of the base will push the token to the user.
+
+```
+  await ladle.batch([
+    ladle.transferAction(vyToken, vyToken, underlyingAmount),
+    ladle.routeAction(vyToken,['redeem', receiver, underlyingAmount]),
+  ])
+```
+
 ## Ether
 
 ### Post Ether as collateral
@@ -285,7 +256,7 @@ This batch adds Ether as collateral to a vault. It can be combined with previous
 
 ```
   await ladle.batch([
-    ladle.joinEtherAction(ethId),
+    ladle.wrapEtherAction(to),
     ladle.pourAction(vaultId, ignored, posted, 0),
   ],
   { value: etherUsed }
@@ -294,7 +265,7 @@ This batch adds Ether as collateral to a vault. It can be combined with previous
 
 | Param     | Description                                                                                      |
 | --------- | ------------------------------------------------------------------------------------------------ |
-| `ethId`   | Variable Rate identifier for Ether. Probably `ETH` converted to bytes6.                          |
+| `to`      | Address to which the wrapped ether should be sent to.                                            |
 | `vaultId` | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch.    |
 | `posted`  | Amount of collateral being deposited.                                                            |
 | `ignored` | Receiver of any tokens produced by pour, which is not producing any in this batch.               |
@@ -309,7 +280,7 @@ The Ether withdrawn will be temporarily held by the Ladle until the end of the t
 ```
   await ladle.batch([
     ladle.pourAction(vaultId, ladle, withdrawn.mul(-1), 0),
-    ladle.exitEtherAction(receiver),
+    ladle.unwrapEtherAction(receiver),
     ladle.destroy(vaultId),
   ])
 ```
