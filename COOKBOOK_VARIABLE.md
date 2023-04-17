@@ -28,6 +28,7 @@
 - [Post ERC20 collateral (Join Approval)](#post-erc20-collateral-join-approval)
 - [Post ERC20 collateral (Ladle Approval)](#post-erc20-collateral-ladle-approval)
 - [Withdraw ERC20 collateral](#withdraw-erc20-collateral)
+- [Borrow base](#borrow-base)
 
 [Debt Repayment](#debt-repayment)
 
@@ -175,6 +176,23 @@ This batch removes an amount of an ERC20 collateral from a vault. Destroying the
 | `0`         | Amount of debt to add to the vault, and base to send to the receiver of pour. None in this case. |
 
 **Limits:** The collateral token balance of the related Join.
+
+### Borrow base
+
+This batch borrows base tokens in exchange for the collateral.
+
+```
+await ladle.batch([
+    ladle.pourAction(vaultId, receiver, collateralAmount, borrowAmount),
+])
+```
+
+| Param              | Description                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `vaultId`          | Vault to add the collateral to. Set to 0 if the vault was created as part of this same batch. |
+| `receiver`         | Receiver of the collateral.                                                                   |
+| `collateralAmount` | Collateral amount to deposit.                                                                 |
+| `borrowAmount`     | Amount of debt to add to the vault, and base to send to the receiver of pour.                 |
 
 ## Debt Repayment
 
