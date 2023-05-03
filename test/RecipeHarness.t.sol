@@ -155,7 +155,6 @@ contract HarnessBase is HarnessStorage {
         vm.label(address(fyToken), "fyToken");
         vm.label(address(ilk), "ilk");
         vm.label(address(base), "base");
-        vm.label(address(base), "base");
         vm.label(address(ilkJoin), "ilkJoin");
         vm.label(address(baseJoin), "baseJoin");
         vm.label(address(pool), "pool");
@@ -182,7 +181,7 @@ contract HarnessBase is HarnessStorage {
         
         vm.stopPrank();
 
-        bytes12 vaultId = abi.decode(results[0], (bytes12));
+        vaultId = abi.decode(results[0], (bytes12));
 
         _clearBatch(batch.length);
 
@@ -191,7 +190,7 @@ contract HarnessBase is HarnessStorage {
 
     function _getAmountToBorrow() internal returns (uint256 borrowed) {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
+        borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
         borrowed = borrowed == 0 ? baseUnit : borrowed; // If dust is 0 (ETH/ETH), we borrow 1 base unit
 
         return borrowed;
@@ -200,18 +199,18 @@ contract HarnessBase is HarnessStorage {
     function _getAmountToPost(uint256 borrowed) internal returns (uint256 posted) {
         DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
         (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
-        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
+        posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
 
         return posted;
     }
 
     function _postEther() internal returns (bytes12 vaultId, uint256 posted) {
         vm.deal(user, 1 ether);
-        uint256 posted = user.balance;
+        posted = user.balance;
         
         // Build vault
         vm.prank(user);
-        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        (vaultId,) = ladle.build(seriesId, ilkId, 0);
         
         // DEPRECATED
         // batch.push(abi.encodeWithSelector(ladle.joinEther.selector, ilkId));
@@ -324,7 +323,7 @@ contract HarnessBase is HarnessStorage {
 
         vm.prank(user);
         bytes[] memory results = ladle.batch{ value: user.balance }(batch);
-        (,,uint256 lpTokensMinted) = abi.decode(results[4], (uint256, uint256, uint256));
+        (,,lpTokensMinted) = abi.decode(results[4], (uint256, uint256, uint256));
 
         _clearBatch(batch.length);
 
@@ -359,13 +358,13 @@ contract RecipeHarness is HarnessBase {
     /// VAULT MANAGEMENT ///
     //////////////////////*/
 
-    function testBuildVault() public canSkip {
+    function test_buildVault() public canSkip {
         bytes12 vaultId = _buildVault(0, 0);
 
         assertEq(cauldron.vaults(vaultId).owner, user);
     }
 
-    function testDestroyVault() public canSkip {
+    function test_destroyVault() public canSkip {
         bytes12 vaultId = _buildVault(0, 0);
 
         vm.prank(user);
@@ -374,7 +373,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(cauldron.vaults(vaultId).owner, address(0));
     }
 
-    function testMergeVaults() public canSkip {
+    function test_mergeVaults() public canSkip {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
         
@@ -410,7 +409,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(mergedBalances.art, artSum);
     }
 
-    function testSplitVaults() public canSkip {
+    function test_splitVaults() public canSkip {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -450,7 +449,7 @@ contract RecipeHarness is HarnessBase {
     /// COLLATERAL AND BORROWING ///
     //////////////////////////////*/
 
-    function testBorrowFYToken() public canSkip {
+    function test_borrowFYToken() public canSkip {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -478,7 +477,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(balances.art, borrowed);
     }
 
-    function testBorrowUnderlying() public canSkip rectifyPoolForBorrow {
+    function test_borrowUnderlying() public canSkip rectifyPoolForBorrow {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -512,7 +511,7 @@ contract RecipeHarness is HarnessBase {
         assertApproxEqRel(balances.art, borrowed, 1e17);
     }
 
-    function testWithdrawCollateral() public canSkip {
+    function test_withdrawCollateral() public canSkip {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -543,7 +542,7 @@ contract RecipeHarness is HarnessBase {
     /// DEBT REPAYMENT ///
     ////////////////////*/
 
-    function testRepayUnderlyingBeforeMaturity() public canSkip rectifyPool {
+    function test_repayUnderlyingBeforeMaturity() public canSkip rectifyPool {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -585,7 +584,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(base.balanceOf(user), 0);
     }
 
-    function testRepayVaultUnderlyingBeforeMaturity() public canSkip rectifyPool {
+    function test_repayVaultUnderlyingBeforeMaturity() public canSkip rectifyPool {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -619,7 +618,7 @@ contract RecipeHarness is HarnessBase {
         assertLt(base.balanceOf(user), initialBalances.art);
     }
 
-    function testRepayUnderlyingAfterMaturity() public canSkip {
+    function test_repayUnderlyingAfterMaturity() public canSkip {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -657,7 +656,7 @@ contract RecipeHarness is HarnessBase {
         // assertApproxEqRel(base.balanceOf(user), initialBaseBalance - initialBalances.art, IERC20Metadata(address(base)).decimals() / 100);
     }
 
-    function testRedeem() public canSkip rectifyJoin {
+    function test_redeem() public canSkip rectifyJoin {
         cash(fyToken, user, baseUnit);
         _afterMaturity();
 
@@ -671,7 +670,7 @@ contract RecipeHarness is HarnessBase {
     }
 
     // Need new series id
-    function testRollDebtBeforeMaturity() public canSkip {
+    function test_rollDebtBeforeMaturity() public canSkip {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
 
@@ -708,7 +707,7 @@ contract RecipeHarness is HarnessBase {
     /// LENDING ///
     /////////////*/
 
-    function testLend() public canSkip rectifyPool {
+    function test_lend() public canSkip rectifyPool {
         cash(base, user, baseUnit);
         vm.prank(user);
         base.approve(address(ladle), baseUnit);
@@ -729,7 +728,7 @@ contract RecipeHarness is HarnessBase {
         assertApproxEqRel(fyToken.balanceOf(user), baseUnit, 1e17);
     }
 
-    function testCloseLendBeforeMaturity() public canSkip rectifyPool {
+    function test_closeLendBeforeMaturity() public canSkip rectifyPool {
         cash(fyToken, user, baseUnit);
         vm.prank(user);
         fyToken.approve(address(ladle), baseUnit);
@@ -754,7 +753,7 @@ contract RecipeHarness is HarnessBase {
     }
 
     // Need different pool addresses
-    function testRollLendingBeforeMaturity() public canSkip {
+    function test_rollLendingBeforeMaturity() public canSkip {
         cash(base, user, baseUnit);
         vm.prank(user);
         base.approve(address(ladle), baseUnit);
@@ -794,7 +793,7 @@ contract RecipeHarness is HarnessBase {
         ladle.batch(batch);
     }
 
-    function testRollLendingAfterMaturity() public canSkip {
+    function test_rollLendingAfterMaturity() public canSkip {
         cash(base, user, baseUnit);
         vm.prank(user);
         base.approve(address(ladle), baseUnit);
@@ -838,7 +837,7 @@ contract RecipeHarness is HarnessBase {
     /// LIQUIDITY PROVIDING ///
     /////////////////////////*/
 
-    function testProvideLiquidityByBorrowing() public canSkip canProvideLiquidity {
+    function test_provideLiquidityByBorrowing() public canSkip canProvideLiquidity {
         // Get amounts to provide to the pool
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
@@ -865,7 +864,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(lpTokensMinted, baseToPool);
     }
 
-    function testProvideLiquidityWithUnderlying() public canSkip canProvideLiquidity {
+    function test_provideLiquidityWithUnderlying() public canSkip canProvideLiquidity {
         // Get amounts to provide to the pool
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
@@ -898,7 +897,7 @@ contract RecipeHarness is HarnessBase {
         assertGt(pool.balanceOf(user), 0); // user will have a little less than one lp token
     }
 
-    function testProvideLiquidityByBuying() public canSkip canProvideLiquidity {
+    function test_provideLiquidityByBuying() public canSkip canProvideLiquidity {
         uint256 baseWithSlippage = baseUnit * 4; // Better way to do this so it doesn't revert with NotEnoughBaseIn?
         uint256 fyTokenToBuy = baseUnit;
 
@@ -930,7 +929,7 @@ contract RecipeHarness is HarnessBase {
     }
 
     // not confident in the assertions for these liquidity removal functions
-    function testRemoveLiquidityAndRepay() public canSkip canProvideLiquidity {
+    function test_removeLiquidityAndRepay() public canSkip canProvideLiquidity {
         // Get amounts to provide to the pool
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
@@ -978,7 +977,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(pool.balanceOf(user), initialPoolBalance - lpTokensMinted);
     }
 
-    function testRemoveLiquidityRepayAndSell() public canSkip canProvideLiquidity {
+    function test_removeLiquidityRepayAndSell() public canSkip canProvideLiquidity {
         // Get amounts to provide to the pool
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
@@ -1031,7 +1030,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(pool.balanceOf(user), initialPoolBalance - lpTokensMinted);
     }
 
-    function testRemoveLiquidityAndRedeem() public canSkip canProvideLiquidity {
+    function test_removeLiquidityAndRedeem() public canSkip canProvideLiquidity {
         // Get amounts to provide to the pool
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
@@ -1075,7 +1074,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(pool.balanceOf(user), initialPoolBalance - lpTokensMinted);
     }
 
-    function testRemoveLiquidityAndSell() public canSkip canProvideLiquidity {
+    function test_removeLiquidityAndSell() public canSkip canProvideLiquidity {
         // Get amounts to provide to the pool
         uint256 poolBaseBalance = pool.getBaseBalance();
         uint256 poolFYTokenBalance = pool.getFYTokenBalance() - pool.totalSupply();
@@ -1120,11 +1119,11 @@ contract RecipeHarness is HarnessBase {
     /// STRATEGIES ///
     ////////////////*/
 
-    function testProvideLiquidityToStrategyByBorrowing() public canSkip canProvideLiquidity {
+    function test_provideLiquidityToStrategyByBorrowing() public canSkip canProvideLiquidity {
         _borrowAndPoolStrategy(user, baseUnit);
     }
 
-    function testProvideLiquidityToStrategyByBuying() public canSkip canProvideLiquidity {
+    function test_provideLiquidityToStrategyByBuying() public canSkip canProvideLiquidity {
         uint256 baseWithSlippage = baseUnit * 4;
         uint256 fyTokensToBuy = baseUnit;
 
@@ -1152,7 +1151,7 @@ contract RecipeHarness is HarnessBase {
         // assertApproxEqAbs(strategy.balanceOf(user), baseUnit * 4, baseUnit / 100);
     }
 
-    function testRemoveLiquidityFromStrategy() public canSkip canProvideLiquidity {
+    function test_removeLiquidityFromStrategy() public canSkip canProvideLiquidity {
         _borrowAndPoolStrategy(user, baseUnit);
 
         uint256 strategyTokensBurnt = strategy.balanceOf(user);
@@ -1186,7 +1185,7 @@ contract RecipeHarness is HarnessBase {
         ladle.batch(batch);
     }
 
-    function testRemoveLiquidityFromDeprecatedStrategy() public canSkip canProvideLiquidity {
+    function test_removeLiquidityFromDeprecatedStrategy() public canSkip canProvideLiquidity {
         _borrowAndPoolStrategy(user, baseUnit);
 
         uint256 strategyTokensBurnt = strategy.balanceOf(user);
@@ -1214,11 +1213,11 @@ contract RecipeHarness is HarnessBase {
     /// ETHER ///
     ///////////*/
 
-    function testPostEtherCollateral() public canSkip etherCollateral {
+    function test_postEtherCollateral() public canSkip etherCollateral {
         _postEther();
     }
 
-    function testWithdrawEtherCollateral() public canSkip etherCollateral {
+    function test_withdrawEtherCollateral() public canSkip etherCollateral {
         (bytes12 vaultId, uint256 posted) = _postEther();
 
         batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, address(ladle), -posted.i128(), 0));
@@ -1231,7 +1230,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(user.balance, 1 ether);
     }
 
-    function testRedeemfyETH() public canSkip etherBase {
+    function test_redeemfyETH() public canSkip etherBase {
         cash(fyToken, user, baseUnit);
         vm.prank(user);
         fyToken.approve(address(ladle), baseUnit);
@@ -1248,7 +1247,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(user.balance, 1 ether);
     }
 
-    function testProvideEtherLiquidityByBorrowing() public canSkip etherBase {
+    function test_provideEtherLiquidityByBorrowing() public canSkip etherBase {
         uint256 initialJoinBalance = baseJoin.storedBalance();
 
         // Give user Ether to provide liquidity with
@@ -1262,7 +1261,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(lpTokensMinted, 8 ether);
     }
 
-    function testProvideEtherLiquidityByBuying() public canSkip etherBase {
+    function test_provideEtherLiquidityByBuying() public canSkip etherBase {
         vm.deal(user, 10 ether);
 
         batch.push(
@@ -1288,7 +1287,7 @@ contract RecipeHarness is HarnessBase {
         assertEq(lpTokensMinted, 10 ether);
     }
 
-    function testRemoveEtherLiquidity() public canSkip etherBase {
+    function test_removeEtherLiquidity() public canSkip etherBase {
         // Give user Ether to provide liquidity with
         vm.deal(user, 10 ether);
 
@@ -1321,7 +1320,7 @@ contract RecipeHarness is HarnessBase {
     /// ERC1155 ///
     /////////////*/
 
-    function testPostERC1155Collateral() public canSkip erc1155Collateral {
+    function test_postERC1155Collateral() public canSkip erc1155Collateral {
         // Get posted amount
         uint256 posted = _getAmountToPost(0);
 
@@ -1348,7 +1347,7 @@ contract RecipeHarness is HarnessBase {
         ladle.batch(batch);
     }
 
-    function testWithdrawERC1155Collateral() public canSkip erc1155Collateral {
+    function test_withdrawERC1155Collateral() public canSkip erc1155Collateral {
         // Get posted amount
         uint256 posted = _getAmountToPost(0);
 
