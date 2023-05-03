@@ -4,13 +4,11 @@ pragma solidity >=0.8.13;
 import "./HarnessImports.sol";
 import {HarnessStorage} from "./HarnessStorage.sol";
 
-using CastBytes32Bytes6 for bytes32;
-using CastU256I128 for uint256;
-using CastU256U128 for uint256;
-using CastU128I128 for uint128;
+using Cast for bytes32;
+using Cast for uint256;
+using Cast for uint128;
 
 /// @dev This test harness tests that basic functions on the Ladle are functional.
-
 contract HarnessBase is HarnessStorage {
     modifier canSkip() {
         if (!ilkEnabled) {
