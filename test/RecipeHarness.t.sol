@@ -2,7 +2,7 @@
 pragma solidity >=0.8.13;
 
 import "./HarnessImports.sol";
-import {HarnessStorage}         from "./HarnessStorage.sol";
+import {HarnessStorage} from "./HarnessStorage.sol";
 
 using CastBytes32Bytes6 for bytes32;
 using CastU256I128 for uint256;
@@ -25,7 +25,7 @@ contract HarnessBase is HarnessStorage {
     }
 
     modifier rectifyJoin() {
-        if(vm.envOr(RECTIFY, false)) {
+        if (vm.envOr(RECTIFY, false)) {
             _provisionJoin();
             console.log("Rectified join");
             _;
@@ -35,7 +35,7 @@ contract HarnessBase is HarnessStorage {
     }
 
     modifier rectifyPool() {
-        if(vm.envOr(RECTIFY, false)) {
+        if (vm.envOr(RECTIFY, false)) {
             _provisionPool(10_000, 10_000);
             console.log("Rectified pool");
             _;
@@ -45,17 +45,17 @@ contract HarnessBase is HarnessStorage {
     }
 
     modifier rectifyPoolForBorrow() {
-        if(vm.envOr(RECTIFY, false)) {
+        if (vm.envOr(RECTIFY, false)) {
             _provisionPool(10_000, 0);
             console.log("Rectified pool for borrow");
             _;
         } else {
             return;
-        } 
+        }
     }
 
     modifier etherCollateral() {
-        if(ilkId != 0x303000000000) {
+        if (ilkId != 0x303000000000) {
             console2.log("Not ETH collateral");
             return;
         }
@@ -64,7 +64,7 @@ contract HarnessBase is HarnessStorage {
 
     modifier etherBase() {
         // ilk doesn't apply here but we want weth base
-        if(ilkId == 0x303000000000 && baseId == 0x303000000000) {
+        if (ilkId == 0x303000000000 && baseId == 0x303000000000) {
             _;
         } else {
             console2.log("Not ETH base");
@@ -91,7 +91,7 @@ contract HarnessBase is HarnessStorage {
     }
 
     modifier canProvideLiquidity() {
-        if(ilkId != baseId) {
+        if (ilkId != baseId) {
             console2.log("Unable to provide liquidity for this ilk-base pair");
             return;
         }
@@ -159,7 +159,7 @@ contract HarnessBase is HarnessStorage {
         vm.label(address(baseJoin), "baseJoin");
         vm.label(address(pool), "pool");
     }
-    
+
     function _clearBatch(uint256 length) internal {
         for (uint256 i = 0; i < length; i++) {
             batch.pop();
@@ -170,7 +170,7 @@ contract HarnessBase is HarnessStorage {
         vm.warp(fyToken.maturity());
     }
 
-    function _buildVault(uint256 posted, uint256 borrowed) internal returns (bytes12 vaultId) {        
+    function _buildVault(uint256 posted, uint256 borrowed) internal returns (bytes12 vaultId) {
         vm.startPrank(user);
 
         ilk.approve(address(ladle), posted);
@@ -178,7 +178,7 @@ contract HarnessBase is HarnessStorage {
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, ilk, address(ilkJoin), posted));
         batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, user, posted.i128(), borrowed.i128()));
         bytes[] memory results = ladle.batch(batch);
-        
+
         vm.stopPrank();
 
         vaultId = abi.decode(results[0], (bytes12));
@@ -207,14 +207,14 @@ contract HarnessBase is HarnessStorage {
     function _postEther() internal returns (bytes12 vaultId, uint256 posted) {
         vm.deal(user, 1 ether);
         posted = user.balance;
-        
+
         // Build vault
         vm.prank(user);
         (vaultId,) = ladle.build(seriesId, ilkId, 0);
-        
+
         // DEPRECATED
         // batch.push(abi.encodeWithSelector(ladle.joinEther.selector, ilkId));
-        
+
         batch.push(
             abi.encodeWithSelector(
                 ladle.moduleCall.selector,
@@ -224,22 +224,23 @@ contract HarnessBase is HarnessStorage {
         );
         batch.push(abi.encodeWithSelector(ladle.pour.selector, vaultId, address(ladle), posted, 0));
 
-
-
         vm.prank(user);
         // address(ladle).call{ value: posted }(abi.encodeWithSelector(ladle.batch.selector, batch));
-        ladle.batch{ value: user.balance }(batch);
-        
+        ladle.batch{value: user.balance}(batch);
+
         DataTypes.Balances memory balances = cauldron.balances(vaultId);
 
         assertEq(balances.ink, posted);
-        
+
         _clearBatch(batch.length);
 
         return (vaultId, posted);
     }
 
-    function _borrowAndPool(bytes12 vaultId, uint256 baseToPool, uint256 fyTokenToPool) internal returns (uint256 lpTokensMinted) {        
+    function _borrowAndPool(bytes12 vaultId, uint256 baseToPool, uint256 fyTokenToPool)
+        internal
+        returns (uint256 lpTokensMinted)
+    {
         vm.startPrank(user);
 
         base.approve(address(ladle), baseToPool);
@@ -253,12 +254,12 @@ contract HarnessBase is HarnessStorage {
             )
         );
         bytes[] memory results = ladle.batch(batch);
-        
+
         vm.stopPrank();
 
         _clearBatch(batch.length);
 
-        (,,lpTokensMinted) = abi.decode(results[2], (uint256, uint256, uint256));
+        (,, lpTokensMinted) = abi.decode(results[2], (uint256, uint256, uint256));
 
         return lpTokensMinted;
     }
@@ -270,7 +271,7 @@ contract HarnessBase is HarnessStorage {
         uint256 baseToPool = totalBase - fyTokenToPool;
 
         cash(base, guy, totalBase);
-        
+
         vm.startPrank(guy);
 
         base.approve(address(ladle), totalBase);
@@ -296,13 +297,13 @@ contract HarnessBase is HarnessStorage {
         _clearBatch(batch.length);
     }
 
-    function _borrowAndPoolEther() internal returns (uint256 lpTokensMinted) {        
+    function _borrowAndPoolEther() internal returns (uint256 lpTokensMinted) {
         batch.push(abi.encodeWithSelector(ladle.build.selector, seriesId, ilkId, 0));
         batch.push(
             abi.encodeWithSelector(
                 ladle.moduleCall.selector,
                 address(wrapEtherModule),
-                abi.encodeWithSelector(wrapEtherModule.wrap.selector, address(baseJoin),  2 ether)
+                abi.encodeWithSelector(wrapEtherModule.wrap.selector, address(baseJoin), 2 ether)
             )
         );
         batch.push(
@@ -317,13 +318,13 @@ contract HarnessBase is HarnessStorage {
             abi.encodeWithSelector(
                 ladle.route.selector,
                 address(pool),
-                abi.encodeWithSelector(pool.mint.selector, user, user, 0 , type(uint256).max)
+                abi.encodeWithSelector(pool.mint.selector, user, user, 0, type(uint256).max)
             )
         );
 
         vm.prank(user);
-        bytes[] memory results = ladle.batch{ value: user.balance }(batch);
-        (,,lpTokensMinted) = abi.decode(results[4], (uint256, uint256, uint256));
+        bytes[] memory results = ladle.batch{value: user.balance}(batch);
+        (,, lpTokensMinted) = abi.decode(results[4], (uint256, uint256, uint256));
 
         _clearBatch(batch.length);
 
@@ -353,7 +354,6 @@ contract HarnessBase is HarnessStorage {
 }
 
 contract RecipeHarness is HarnessBase {
-
     /*//////////////////////
     /// VAULT MANAGEMENT ///
     //////////////////////*/
@@ -376,7 +376,7 @@ contract RecipeHarness is HarnessBase {
     function test_mergeVaults() public canSkip {
         // Get borrowed amount
         uint256 borrowed = _getAmountToBorrow();
-        
+
         // Get posted amount
         uint256 posted = _getAmountToPost(borrowed);
 
@@ -455,7 +455,7 @@ contract RecipeHarness is HarnessBase {
 
         // Get posted amount
         uint256 posted = _getAmountToPost(borrowed);
-        
+
         cash(ilk, user, posted);
         vm.prank(user);
         ilk.approve(address(ladle), posted);
@@ -548,7 +548,7 @@ contract RecipeHarness is HarnessBase {
 
         // Get posted amount
         uint256 posted = _getAmountToPost(borrowed);
-        
+
         // want to borrow more than minimum which is what _getAmountToBorrow is
         // so multiply borrowed and posted by 3
 
@@ -557,7 +557,7 @@ contract RecipeHarness is HarnessBase {
         vm.prank(user);
         ilk.approve(address(ladle), posted);
 
-        // Build vault and borrow underlying, 
+        // Build vault and borrow underlying,
         bytes12 vaultId = _buildVault(posted * 3, borrowed * 3);
 
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
@@ -590,7 +590,7 @@ contract RecipeHarness is HarnessBase {
 
         // Get posted amount
         uint256 posted = _getAmountToPost(borrowed);
-        
+
         cash(ilk, user, posted); // give more to user to repay debt with interest
         vm.prank(user);
         ilk.approve(address(ladle), posted);
@@ -624,7 +624,7 @@ contract RecipeHarness is HarnessBase {
 
         // Get posted amount
         uint256 posted = _getAmountToPost(borrowed);
-        
+
         // Give user collateral and approve
         cash(ilk, user, posted);
         vm.prank(user);
@@ -666,7 +666,7 @@ contract RecipeHarness is HarnessBase {
         fyToken.redeem(initialFYTokens, user, user);
 
         assertEq(fyToken.balanceOf(user), 0);
-        assertApproxEqRel(base.balanceOf(user), initialFYTokens, baseUnit / 10); // TODO: This would be different for mature fyToken. For sanity, you can check that the user gets between 1.0 and 1.1 base per fyToken.   
+        assertApproxEqRel(base.balanceOf(user), initialFYTokens, baseUnit / 10); // TODO: This would be different for mature fyToken. For sanity, you can check that the user gets between 1.0 and 1.1 base per fyToken.
     }
 
     // Need new series id
@@ -859,7 +859,9 @@ contract RecipeHarness is HarnessBase {
         uint256 lpTokensMinted = _borrowAndPool(vaultId, baseToPool, fyTokenToPool);
 
         assertApproxEqAbs(pool.getBaseBalance(), poolBaseBalance + baseToPool, baseUnit / 100);
-        assertApproxEqAbs(pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool, baseUnit / 100); // TODO: There is one wei lost somewhere
+        assertApproxEqAbs(
+            pool.getFYTokenBalance() - pool.totalSupply(), poolFYTokenBalance + fyTokenToPool, baseUnit / 100
+        ); // TODO: There is one wei lost somewhere
         // TODO: Maybe assert that the pool used all the base and fyToken supplied
         assertEq(lpTokensMinted, baseToPool);
     }
@@ -949,7 +951,7 @@ contract RecipeHarness is HarnessBase {
 
         // Borrow against the vault and pool the base
         uint256 lpTokensMinted = _borrowAndPool(vaultId, baseToPool, fyTokenToPool);
-        
+
         vm.prank(user);
         pool.approve(address(ladle), lpTokensMinted);
 
@@ -997,7 +999,7 @@ contract RecipeHarness is HarnessBase {
 
         // Borrow against the vault and pool the base
         uint256 lpTokensMinted = _borrowAndPool(vaultId, baseToPool, fyTokenToPool);
-        
+
         vm.prank(user);
         pool.approve(address(ladle), lpTokensMinted);
 
@@ -1094,7 +1096,7 @@ contract RecipeHarness is HarnessBase {
 
         // Borrow against the vault and pool the base
         uint256 lpTokensMinted = _borrowAndPool(vaultId, baseToPool, fyTokenToPool);
-        
+
         vm.prank(user);
         pool.approve(address(ladle), lpTokensMinted);
 
@@ -1132,16 +1134,20 @@ contract RecipeHarness is HarnessBase {
         base.approve(address(ladle), baseUnit * 4);
 
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, base, address(pool), baseWithSlippage));
-        batch.push(abi.encodeWithSelector(
-            ladle.route.selector,
-            address(pool),
-            abi.encodeWithSelector(IPool.mintWithBase.selector, address(strategy), user, fyTokensToBuy, 0, type(uint256).max)
-        ));
-        batch.push(abi.encodeWithSelector(
-            ladle.route.selector,
-            address(strategy),
-            abi.encodeWithSelector(IStrategy.mint.selector, user)
-        ));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(pool),
+                abi.encodeWithSelector(
+                    IPool.mintWithBase.selector, address(strategy), user, fyTokensToBuy, 0, type(uint256).max
+                )
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector, address(strategy), abi.encodeWithSelector(IStrategy.mint.selector, user)
+            )
+        );
 
         vm.prank(user);
         ladle.batch(batch);
@@ -1160,12 +1166,14 @@ contract RecipeHarness is HarnessBase {
         strategy.approve(address(ladle), strategyTokensBurnt);
 
         // Burn strategy tokens
-        batch.push(abi.encodeWithSelector(ladle.transfer.selector, address(strategy), address(strategy), strategyTokensBurnt));
-        batch.push(abi.encodeWithSelector(
-            ladle.route.selector, 
-            address(strategy),
-            abi.encodeWithSelector(IStrategy.burn.selector, address(pool))
-        ));
+        batch.push(
+            abi.encodeWithSelector(ladle.transfer.selector, address(strategy), address(strategy), strategyTokensBurnt)
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector, address(strategy), abi.encodeWithSelector(IStrategy.burn.selector, address(pool))
+            )
+        );
 
         uint256 lpTokensBurnt = pool.balanceOf(user); // why is this 0?
 
@@ -1194,16 +1202,18 @@ contract RecipeHarness is HarnessBase {
         strategy.approve(address(ladle), strategyTokensBurnt);
 
         batch.push(abi.encodeWithSelector(ladle.transfer.selector, strategy, strategy, strategyTokensBurnt));
-        batch.push(abi.encodeWithSelector(
-            ladle.route.selector,
-            address(strategy),
-            abi.encodeWithSelector(IStrategy.burn.selector, address(newStrategy))
-        ));
-        batch.push(abi.encodeWithSelector(
-            ladle.route.selector, 
-            address(strategy),
-            abi.encodeWithSelector(IStrategy.burn.selector, address(pool))
-        ));
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector,
+                address(strategy),
+                abi.encodeWithSelector(IStrategy.burn.selector, address(newStrategy))
+            )
+        );
+        batch.push(
+            abi.encodeWithSelector(
+                ladle.route.selector, address(strategy), abi.encodeWithSelector(IStrategy.burn.selector, address(pool))
+            )
+        );
 
         vm.prank(user);
         ladle.batch(batch);
@@ -1256,7 +1266,7 @@ contract RecipeHarness is HarnessBase {
         uint256 lpTokensMinted = _borrowAndPoolEther();
 
         uint256 finalJoinBalance = baseJoin.storedBalance();
-        
+
         assertEq(finalJoinBalance, initialJoinBalance + 2 ether);
         assertEq(lpTokensMinted, 8 ether);
     }
@@ -1281,8 +1291,9 @@ contract RecipeHarness is HarnessBase {
         batch.push(abi.encodeWithSelector(ladle.exitEther.selector, user));
 
         vm.prank(user);
-        bytes[] memory results = ladle.batch{ value: user.balance }(batch);
-        (uint256 baseIn, uint256 fyTokenIn ,uint256 lpTokensMinted) = abi.decode(results[1], (uint256, uint256, uint256));
+        bytes[] memory results = ladle.batch{value: user.balance}(batch);
+        (uint256 baseIn, uint256 fyTokenIn, uint256 lpTokensMinted) =
+            abi.decode(results[1], (uint256, uint256, uint256));
 
         assertEq(lpTokensMinted, 10 ether);
     }
@@ -1339,9 +1350,7 @@ contract RecipeHarness is HarnessBase {
                 abi.encodeWithSelector(transfer1155Module.transfer1155.selector, ilk, id, ilkJoin, posted, "")
             )
         );
-        batch.push(
-            abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(0), posted, 0)
-        );
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(0), posted, 0));
 
         vm.prank(holder);
         ladle.batch(batch);
@@ -1367,13 +1376,11 @@ contract RecipeHarness is HarnessBase {
                 abi.encodeWithSelector(transfer1155Module.transfer1155.selector, ilk, id, ilkJoin, posted, "")
             )
         );
-        batch.push(
-            abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(0), posted, 0)
-        );
+        batch.push(abi.encodeWithSelector(ladle.pour.selector, bytes12(0), address(0), posted, 0));
 
         vm.prank(holder);
         bytes[] memory results = ladle.batch(batch);
-        
+
         bytes12 vaultId = abi.decode(results[0], (bytes12));
 
         _clearBatch(batch.length);
