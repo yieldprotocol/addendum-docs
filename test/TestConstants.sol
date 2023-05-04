@@ -7,6 +7,9 @@ contract TestConstants {
     bytes6 public constant CHI = 0x434849000000;
     bytes6 public constant RATE = 0x524154450000;
 
+    bytes6 public constant ETH = 0x303000000000;
+    bytes6 public constant DAI = 0x303100000000;
+
     string public constant SERIES_ID = "SERIES_ID";
     string public constant ROLL_SERIES_ID = "ROLL_SERIES_ID";
     string public constant ILK_ID = "ILK_ID";
