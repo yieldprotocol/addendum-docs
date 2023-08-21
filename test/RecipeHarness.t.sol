@@ -180,7 +180,6 @@ contract HarnessBase is HarnessStorage {
         vm.label(address(fyToken), "fyToken");
         vm.label(address(ilk), "ilk");
         vm.label(address(base), "base");
-        vm.label(address(base), "base");
         vm.label(address(ilkJoin), "ilkJoin");
         vm.label(address(baseJoin), "baseJoin");
         vm.label(address(pool), "pool");
@@ -205,36 +204,36 @@ contract HarnessBase is HarnessStorage {
         vm.prank(user);
         bytes[] memory results = ladle.batch(batch);
 
-        bytes12 vaultId = abi.decode(results[0], (bytes12));
+        vaultId = abi.decode(results[0], (bytes12));
 
         _clearBatch(batch.length);
 
         return vaultId;
     }
 
-    function _getAmountToBorrow() internal returns (uint256 borrowed) {
+    function _getAmountToBorrow() internal view returns (uint256 borrowed) {
         DataTypes.Debt memory debt = cauldron.debt(baseId, ilkId);
-        uint256 borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
+        borrowed = debt.min * (10 ** debt.dec); // We borrow `dust`
         borrowed = borrowed == 0 ? baseUnit : borrowed; // If dust is 0 (ETH/ETH), we borrow 1 base unit
 
         return borrowed;
     }
 
-    function _getAmountToPost(uint256 borrowed) internal returns (uint256 posted) {
+    function _getAmountToPost(uint256 borrowed) internal view returns (uint256 posted) {
         DataTypes.SpotOracle memory spot = cauldron.spotOracles(baseId, ilkId);
         (uint256 borrowValue,) = spot.oracle.peek(baseId, ilkId, borrowed);
-        uint256 posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
+        posted = (2 * borrowValue * spot.ratio) / 1e6; // We collateralize to twice the bare minimum. TODO: Collateralize to the minimum
 
         return posted;
     }
 
     function _postEther() internal returns (bytes12 vaultId, uint256 posted) {
         vm.deal(user, 1 ether);
-        uint256 posted = user.balance;
+        posted = user.balance;
         
         // Build vault
         vm.prank(user);
-        (bytes12 vaultId,) = ladle.build(seriesId, ilkId, 0);
+        (vaultId,) = ladle.build(seriesId, ilkId, 0);
         
         // DEPRECATED
         // batch.push(abi.encodeWithSelector(ladle.joinEther.selector, ilkId));
@@ -347,7 +346,7 @@ contract HarnessBase is HarnessStorage {
 
         vm.prank(user);
         bytes[] memory results = ladle.batch{ value: user.balance }(batch);
-        (,,uint256 lpTokensMinted) = abi.decode(results[4], (uint256, uint256, uint256));
+        (,,lpTokensMinted) = abi.decode(results[4], (uint256, uint256, uint256));
 
         _clearBatch(batch.length);
 
